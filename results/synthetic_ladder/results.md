@@ -4,8 +4,8 @@
 - data: synthetic (data/synthetic)
 - split: dev: scored sessions 2025-03-27 -> 2025-11-03; last 40 sessions held out
 - symbols: RELIANCE, HDFCBANK, ICICIBANK, INFY, TCS, BHARTIARTL, SBIN, ITC, LT, KOTAKBANK
-- models: naive = random_walk; hist_mean = historical_mean; seasonal_mean_5d = seasonal_naive, n_sessions=5; ewma_hl1 = ewma, halflife_sessions=1.0; ewma_hl5 = ewma, halflife_sessions=5.0; har = har, pooled=False; har_pooled = har, pooled=True; har_mix = har, intraday_beta=0.5, pooled=True
-- git: 63182ed-dirty
+- models: naive = random_walk; hist_mean = historical_mean; seasonal_mean_5d = seasonal_naive, n_sessions=5; ewma_hl1 = ewma, halflife_sessions=1.0; ewma_hl5 = ewma, halflife_sessions=5.0; har = har, pooled=False; har_pooled = har, pooled=True; har_mix = har, intraday_beta=0.5, pooled=True; arma_logrv_mix = arma_logrv, intraday_beta=0.5, order=[1, 1]; garch = garch, asymmetric=False; gjr_garch = garch, asymmetric=True
+- git: 429fcd3-dirty
 - walk-forward: expanding window, first 60 sessions for training, refit every 5 sessions
 
 ## Results vs naive
@@ -14,16 +14,19 @@
 
 99,314 scored forecasts per model over 10,360 origins; mean target RV 0.1491 %^2; 4,286 (origin, symbol) pairs excluded (missing bars in the target window, zero RV, or a model without a forecast).
 
-| model | QLIKE | QLIKE / naive | MSE | MSE / naive | MASE | DM stat | DM p | beats naive (symbols) |
-|---|---|---|---|---|---|---|---|---|
-| naive | 0.6171 | 1.000 | 0.04281 | 1.000 | 1.000 | - | - | - |
-| hist_mean | 0.3930 | 0.637 | 0.03341 | 0.780 | 0.914 | -22.93 | 2.18e-116 | 10/10 |
-| seasonal_mean_5d | 0.4078 | 0.661 | 0.03249 | 0.759 | 0.909 | -21.97 | 5.9e-107 | 10/10 |
-| ewma_hl1 | 0.3002 | 0.486 | 0.02608 | 0.609 | 0.805 | -38.23 | 8.58e-320 | 10/10 |
-| ewma_hl5 | 0.3296 | 0.534 | 0.02856 | 0.667 | 0.829 | -33.35 | 8.42e-244 | 10/10 |
-| har | 0.3431 | 0.556 | 0.02908 | 0.679 | 0.834 | -30.23 | 1.08e-200 | 10/10 |
-| har_pooled | 0.3382 | 0.548 | 0.029 | 0.678 | 0.828 | -31.16 | 4.33e-213 | 10/10 |
-| har_mix | **0.2926** | 0.474 | 0.02554 | 0.597 | 0.769 | -40.39 | 0 | 10/10 |
+| model | QLIKE | QLIKE / naive | MSE | MSE / naive | MASE | DM stat | DM p | beats naive (symbols) | QLIKE / best of prev rung | p vs prev rung |
+|---|---|---|---|---|---|---|---|---|---|---|
+| naive | 0.6171 | 1.000 | 0.04281 | 1.000 | 1.000 | - | - | - | - | - |
+| hist_mean | 0.3930 | 0.637 | 0.03341 | 0.780 | 0.914 | -22.93 | 2.18e-116 | 10/10 | - | - |
+| seasonal_mean_5d | 0.4078 | 0.661 | 0.03249 | 0.759 | 0.909 | -21.97 | 5.9e-107 | 10/10 | - | - |
+| ewma_hl1 | 0.3002 | 0.486 | 0.02608 | 0.609 | 0.805 | -38.23 | 8.58e-320 | 10/10 | 0.764 | 8.87e-64 |
+| ewma_hl5 | 0.3296 | 0.534 | 0.02856 | 0.667 | 0.829 | -33.35 | 8.42e-244 | 10/10 | 0.839 | 1.04e-46 |
+| har | 0.3431 | 0.556 | 0.02908 | 0.679 | 0.834 | -30.23 | 1.08e-200 | 10/10 | 0.873 | 5.46e-26 |
+| har_pooled | 0.3382 | 0.548 | 0.029 | 0.678 | 0.828 | -31.16 | 4.33e-213 | 10/10 | 0.861 | 9.99e-33 |
+| har_mix | 0.2926 | 0.474 | 0.02554 | 0.597 | 0.769 | -40.39 | 0 | 10/10 | 0.745 | 1.56e-77 |
+| arma_logrv_mix | 0.2896 | 0.469 | 0.02518 | 0.588 | 0.774 | -40.74 | 0 | 10/10 | 0.737 | 7.58e-80 |
+| garch | **0.2855** | 0.463 | 0.02467 | 0.576 | 0.782 | -42.93 | 0 | 10/10 | 0.727 | 3.65e-82 |
+| gjr_garch | 0.2857 | 0.463 | 0.0247 | 0.577 | 0.782 | -42.91 | 0 | 10/10 | 0.727 | 5.89e-82 |
 
 Forecast coverage below 100%: ewma_hl1 98.8%, ewma_hl5 99.3%, har 99.1%, har_pooled 99.1%, har_mix 99.1%
 
@@ -31,16 +34,19 @@ Forecast coverage below 100%: ewma_hl1 98.8%, ewma_hl5 99.3%, har 99.1%, har_poo
 
 1,389 scored forecasts per model over 148 origins; mean target RV 1.99 %^2; 91 (origin, symbol) pairs excluded (missing bars in the target window, zero RV, or a model without a forecast).
 
-| model | QLIKE | QLIKE / naive | MSE | MSE / naive | MASE | DM stat | DM p | beats naive (symbols) |
-|---|---|---|---|---|---|---|---|---|
-| naive | 0.1686 | 1.000 | 2.525 | 1.000 | 1.000 | - | - | - |
-| hist_mean | 0.1635 | 0.970 | 2.41 | 0.955 | 0.978 | -0.20 | 0.841 | 8/10 |
-| seasonal_mean_5d | 0.1180 | 0.700 | 1.75 | 0.693 | 0.846 | -6.96 | 3.42e-12 | 10/10 |
-| ewma_hl1 | 0.1201 | 0.712 | 1.802 | 0.714 | 0.847 | -10.30 | 7.23e-25 | 10/10 |
-| ewma_hl5 | 0.1211 | 0.718 | 1.825 | 0.723 | 0.850 | -5.44 | 5.47e-08 | 10/10 |
-| har | 0.1194 | 0.708 | 1.747 | 0.692 | 0.831 | -7.62 | 2.63e-14 | 10/10 |
-| har_pooled | **0.1144** | 0.678 | 1.736 | 0.687 | 0.817 | -8.34 | 7.3e-17 | 10/10 |
-| har_mix | 0.1144 | 0.678 | 1.736 | 0.687 | 0.817 | -8.34 | 7.3e-17 | 10/10 |
+| model | QLIKE | QLIKE / naive | MSE | MSE / naive | MASE | DM stat | DM p | beats naive (symbols) | QLIKE / best of prev rung | p vs prev rung |
+|---|---|---|---|---|---|---|---|---|---|---|
+| naive | 0.1686 | 1.000 | 2.525 | 1.000 | 1.000 | - | - | - | - | - |
+| hist_mean | 0.1635 | 0.970 | 2.41 | 0.955 | 0.978 | -0.20 | 0.841 | 8/10 | - | - |
+| seasonal_mean_5d | 0.1180 | 0.700 | 1.75 | 0.693 | 0.846 | -6.96 | 3.42e-12 | 10/10 | - | - |
+| ewma_hl1 | 0.1201 | 0.712 | 1.802 | 0.714 | 0.847 | -10.30 | 7.23e-25 | 10/10 | 1.018 | 0.521 |
+| ewma_hl5 | 0.1211 | 0.718 | 1.825 | 0.723 | 0.850 | -5.44 | 5.47e-08 | 10/10 | 1.026 | 0.452 |
+| har | 0.1194 | 0.708 | 1.747 | 0.692 | 0.831 | -7.62 | 2.63e-14 | 10/10 | 1.012 | 0.698 |
+| har_pooled | 0.1144 | 0.678 | 1.736 | 0.687 | 0.817 | -8.34 | 7.3e-17 | 10/10 | 0.969 | 0.211 |
+| har_mix | 0.1144 | 0.678 | 1.736 | 0.687 | 0.817 | -8.34 | 7.3e-17 | 10/10 | 0.969 | 0.211 |
+| arma_logrv_mix | **0.1088** | 0.645 | 1.659 | 0.657 | 0.814 | -9.12 | 7.44e-20 | 10/10 | 0.922 | 0.000247 |
+| garch | 0.1372 | 0.814 | 1.989 | 0.788 | 0.911 | -4.25 | 2.17e-05 | 10/10 | 1.163 | 0.00159 |
+| gjr_garch | 0.1373 | 0.814 | 1.991 | 0.788 | 0.911 | -4.20 | 2.66e-05 | 10/10 | 1.163 | 0.00173 |
 
 Forecast coverage below 100%: ewma_hl1 98.8%, ewma_hl5 99.3%, har 99.1%, har_pooled 99.1%, har_mix 99.1%
 
@@ -53,6 +59,8 @@ How to read this:
   the cross-sectional mean loss per origin and Newey-West errors. Vol forecast errors are
   persistent, so treat borderline p-values with caution.
 * beats naive (symbols): symbols where the model's mean QLIKE is below naive's.
+* QLIKE / best of prev rung: against the lowest-QLIKE model of the rung below, on the
+  same sample, with its DM p-value. The ladder rule is that this must be < 1.
 * Best QLIKE per horizon in bold.
 
 

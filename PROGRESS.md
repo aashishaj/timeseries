@@ -22,15 +22,24 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 - [x] Rung 1: naive, historical mean, seasonal naive (1d), seasonal mean (5d)
 - [x] Rung 2a: seasonal EWMA, HAR-RV (per-symbol, pooled), HAR mix (daily x
       time-of-day x intraday correction)
-- [ ] Rung 2b: GARCH / GJR on seasonally filtered returns, AR(FI)MA on log RV
-- [ ] Compare each rung against the best of the previous rung (DM vs that model, not
-      only vs naive)
+- [x] Rung 2b: GARCH / GJR on seasonally filtered returns, ARMA(1,1) on log daily RV
+- [x] Compare each rung against the best of the previous rung (ratio + DM p-value)
 - [ ] Rung 3: indicators (ATR, range-based vol, Bollinger width, volume, RSI) + LightGBM
 - [ ] Ensembles with weights from past forecast errors only
 - [ ] Simulated paper trading with NSE costs (vol targeting)
 - [ ] Rung 4: deep / foundation models (CPU only; Chronos weights need network access)
 
 ## Log
+
+### 2026-11-11, round 2
+- GARCH(1,1) / GJR on de-seasonalized returns; ARMA(1,1) on log daily RV (with the
+  same time-of-day + intraday-correction wrapper as HAR); previous-rung comparison.
+- Synthetic dev results (QLIKE vs naive; vs best of rung 1, DM p):
+  - 30min: garch 0.463 (0.727, p~1e-82), arma_logrv_mix 0.469, har_mix 0.474.
+  - next_session: arma_logrv_mix 0.645 (0.922, p=0.0002); har_pooled 0.678 (0.969,
+    p=0.21, not significant); garch 0.814 (worse than rung 1: intraday GARCH has no
+    day-to-day memory).
+- Rung 2 passes the ladder rule on both horizons. Next: rung 3 (indicators + LightGBM).
 
 ### 2026-11-11, round 1
 - Added the lockbox (last 40 sessions) and the trial leaderboard.
