@@ -37,6 +37,7 @@ def evaluate(
     *,
     baseline: str = "naive",
     horizons: Mapping[str, Horizon] | None = None,
+    rungs: Mapping[str, int] | None = None,
     floor_rel: float = 1e-6,
 ) -> Evaluation:
     """Evaluate the output of :func:`run_walk_forward` for one or more models/horizons.
@@ -45,6 +46,8 @@ def evaluate(
         forecasts: concatenated engine outputs.
         baseline: model name every result is compared to.
         horizons: used for the target-window overlap in the HAC lag.
+        rungs: ladder rung per model. Each model in rung r > 1 is also compared to the
+            best (lowest QLIKE) model of rung r - 1 on the same sample.
         floor_rel: forecasts below ``floor_rel * median(y)`` are floored before QLIKE
             (a zero variance forecast has infinite QLIKE); the count is reported.
     """
@@ -84,14 +87,23 @@ def evaluate(
             }
         base = losses[baseline]
         base_ps = _per_symbol_means(base, symbols)
+        origin_ids = np.asarray(origins)
+
+        mean_qlike = {m: float(losses[m]["qlike"].mean()) for m in models}
+        rung_of = {m: (rungs or {}).get(m) for m in models}
         for m in models:
             lm = losses[m]
-            d_t = pd.Series(lm["qlike"] - base["qlike"]).groupby(np.asarray(origins)).mean()
             if m == baseline:
                 dm_stat, dm_p = np.nan, np.nan
+                n_origins = len(np.unique(origin_ids))
             else:
-                lag = default_hac_lag(len(d_t), overlap)
-                dm_stat, dm_p = diebold_mariano(d_t.to_numpy(), np.zeros(len(d_t)), lag)
+                dm_stat, dm_p, n_origins = _dm(losses[m], losses[baseline], origin_ids, overlap)
+            prev = [c for c in models if rung_of[m] and rung_of[c] == rung_of[m] - 1]
+            prev_best = min(prev, key=mean_qlike.get) if prev else None
+            vs_prev = mean_qlike[m] / mean_qlike[prev_best] if prev_best else np.nan
+            p_prev = (
+                _dm(losses[m], losses[prev_best], origin_ids, overlap)[1] if prev_best else np.nan
+            )
             ps = _per_symbol_means(lm, symbols)
             wins = int((ps["qlike"] < base_ps["qlike"]).sum())
             summaries.append(
@@ -99,7 +111,8 @@ def evaluate(
                     "horizon": hname,
                     "model": m,
                     "n_obs": int(mask.sum()),
-                    "n_origins": int(len(d_t)),
+                    "n_origins": int(n_origins),
+                    "rung": rung_of[m],
                     "coverage": lm["coverage"],
                     "QLIKE": float(lm["qlike"].mean()),
                     "MSE": float(lm["se"].mean()),
@@ -110,6 +123,9 @@ def evaluate(
                     "DM_stat": dm_stat,
                     "DM_p": dm_p,
                     "symbols_beating_naive": f"{wins}/{len(ps)}" if m != baseline else "-",
+                    "prev_rung_best": prev_best,
+                    "QLIKE_vs_prev_rung": vs_prev,
+                    "DM_p_vs_prev_rung": p_prev,
                     "floored": lm["floored"],
                     "excluded_obs": int(n_total - mask.sum()),
                     "mean_target": float(yv.mean()) if len(yv) else np.nan,
@@ -129,6 +145,15 @@ def evaluate(
     cols = ["horizon", "model", "symbol", "n_obs", "QLIKE", "MSE", "MAE"]
     per_sym = per_sym[[*cols, "QLIKE_vs_naive", "MSE_vs_naive"]]
     return Evaluation(summary=summary, per_symbol=per_sym)
+
+
+def _dm(
+    loss_a: dict, loss_b: dict, origin_ids: np.ndarray, overlap: int
+) -> tuple[float, float, int]:
+    """DM test on the per-origin cross-sectional mean QLIKE differential (a - b)."""
+    d_t = pd.Series(loss_a["qlike"] - loss_b["qlike"]).groupby(origin_ids).mean()
+    lag = default_hac_lag(len(d_t), overlap)
+    return (*diebold_mariano(d_t.to_numpy(), np.zeros(len(d_t)), lag), len(d_t))
 
 
 def _per_symbol_means(losses: dict, symbols: pd.Index) -> pd.DataFrame:

@@ -65,4 +65,4 @@ def test_registry():
     m = build_model("seasonal_naive", "sn5", {"n_sessions": 5})
     assert isinstance(m, SeasonalNaive) and m.name == "sn5" and m.n_sessions == 5
     with pytest.raises(KeyError):
-        build_model("garch")
+        build_model("not_a_model")

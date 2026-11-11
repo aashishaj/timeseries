@@ -116,7 +116,8 @@ def cmd_backtest(args: argparse.Namespace) -> int:
             outputs.append(run_walk_forward(panel, model, h, wf))
     forecasts = pd.concat(outputs, ignore_index=True)
     hmap = {h.name: h for h in horizons}
-    evaluation = evaluate(forecasts, baseline=cfg.baseline, horizons=hmap)
+    rungs = {m["name"]: m["rung"] for m in specs if m.get("rung") is not None}
+    evaluation = evaluate(forecasts, baseline=cfg.baseline, horizons=hmap, rungs=rungs)
 
     print(summary_markdown(evaluation, hmap))
     print(LEGEND)

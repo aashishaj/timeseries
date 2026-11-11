@@ -5,6 +5,7 @@ description = "Honest, walk-forward evaluation of time series forecasting models
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "arch>=7",
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=15",

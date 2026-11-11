@@ -80,13 +80,82 @@ class SeasonalEWMA(ForecastModel):
         return self.forecast_frame(history_df, yhat)
 
 
-class HAR(ForecastModel):
-    """HAR-RV (Corsi 2009) on daily realized variance, in logs, with a smearing correction.
+class DailyComponentModel(ForecastModel):
+    """Daily RV forecast x time-of-day share x optional intraday correction.
 
-    * next-session horizon: the HAR forecast of tomorrow's RV;
-    * intraday horizons: today's HAR forecast x the time-of-day share of the target
-      window x an intraday correction ``(realized so far / expected so far) ** beta``
-      (``beta=0`` disables the correction; it is clipped to [1/4, 4]).
+    Subclasses provide a daily model through :meth:`_fit_daily` and
+    :meth:`_forecast_daily`; this class turns it into forecasts for any horizon up to a
+    session:
+
+    * next-session horizon: the daily forecast of the next session's RV;
+    * intraday horizons: today's daily forecast x the time-of-day share of the target
+      window x ``(realized so far / expected so far) ** intraday_beta`` (clipped to
+      [1/4, 4]; ``intraday_beta=0`` disables it).
+    """
+
+    history_days: int = 60  # completed sessions passed to _forecast_daily
+
+    def __init__(
+        self,
+        name: str,
+        intraday_beta: float = 0.0,
+        pooled_seasonality: bool = True,
+        min_coverage: float = 0.8,
+    ) -> None:
+        super().__init__(name)
+        self.intraday_beta = intraday_beta
+        self.pooled_seasonality = pooled_seasonality
+        self.min_coverage = min_coverage
+
+    def _fit_daily(self, rv: np.ndarray) -> None:
+        raise NotImplementedError
+
+    def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
+        """Forecast of the next session's RV given completed-session RVs (D, S)."""
+        raise NotImplementedError
+
+    def fit(self, train_df: pd.DataFrame) -> Self:
+        self.profile_ = seasonal_profile(train_df, self.pooled_seasonality)
+        self.symbols_ = panel_symbols(train_df)
+        rv, _ = daily_rv(train_df, self.profile_, self.min_coverage)
+        self._fit_daily(rv)
+        self.cache_: tuple[int, pd.Timestamp, np.ndarray] | None = None
+        return self
+
+    def _today_forecast(self, history_df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        s, b = n_symbols(history_df), bars_per_session(history_df)
+        n_bars = len(history_df) // s
+        k = n_bars % b
+        need = (self.history_days + 1) * b + k
+        tail = history_df.iloc[-min(need, n_bars) * s :] if n_bars else history_df
+        rv, today = daily_rv(tail, self.profile_, self.min_coverage)
+        n_days = n_bars // b
+        key_ts = history_df["ts"].iat[(n_days * b - 1) * s] if n_days else None
+        if self.cache_ is not None and self.cache_[:2] == (n_days, key_ts):
+            return self.cache_[2], today
+        fc = self._forecast_daily(rv) if len(rv) else np.full(s, np.nan)
+        self.cache_ = (n_days, key_ts, fc)
+        return fc, today
+
+    def predict(self, history_df: pd.DataFrame, horizon: int) -> pd.DataFrame:
+        if horizon > bars_per_session(history_df):
+            raise ValueError(f"{type(self).__name__} forecasts at most one session ahead")
+        fc_day, today = self._today_forecast(history_df)
+        k = len(today)
+        share = self.profile_ / self.profile_.sum(axis=0, keepdims=True)
+        yhat = fc_day * _window_profile(share, k, horizon)
+        if k and self.intraday_beta:
+            observed = ~np.isnan(today)
+            expected = fc_day * (observed * share[:k]).sum(axis=0)
+            realized = np.where(observed, today, 0.0).sum(axis=0)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = np.clip(realized / expected, 0.25, 4.0)
+            yhat = yhat * np.where(np.isfinite(ratio), ratio**self.intraday_beta, 1.0)
+        return self.forecast_frame(history_df, yhat)
+
+
+class HAR(DailyComponentModel):
+    """HAR-RV (Corsi 2009) on daily realized variance, in logs, with a smearing correction.
 
     ``pooled=True`` shares the slopes across symbols (symbol-specific intercepts),
     which is much more stable with a few months of data.
@@ -101,18 +170,12 @@ class HAR(ForecastModel):
         pooled_seasonality: bool = True,
         min_coverage: float = 0.8,
     ) -> None:
-        super().__init__(name)
+        super().__init__(name, intraday_beta, pooled_seasonality, min_coverage)
         self.lags = tuple(lags)
         self.pooled = pooled
-        self.intraday_beta = intraday_beta
-        self.pooled_seasonality = pooled_seasonality
-        self.min_coverage = min_coverage
+        self.history_days = max(self.lags)
 
-    # ------------------------------------------------------------------ fit
-    def fit(self, train_df: pd.DataFrame) -> Self:
-        self.profile_ = seasonal_profile(train_df, self.pooled_seasonality)
-        self.symbols_ = panel_symbols(train_df)
-        rv, _ = daily_rv(train_df, self.profile_, self.min_coverage)
+    def _fit_daily(self, rv: np.ndarray) -> None:
         feats = har_features(rv, self.lags)  # (D, L, S)
         with np.errstate(divide="ignore", invalid="ignore"):
             x = np.log(feats[:-1])  # features known at the close of day t
@@ -145,44 +208,53 @@ class HAR(ForecastModel):
                 beta, *_ = np.linalg.lstsq(design, yj, rcond=None)
                 self.coef_[j] = beta
                 self.smear_[j] = np.mean(np.exp(yj - design @ beta))
-        self.cache_: tuple[int, pd.Timestamp, np.ndarray] | None = None
-        return self
 
-    # ------------------------------------------------------------------ predict
-    def _today_forecast(self, history_df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        s, b = n_symbols(history_df), bars_per_session(history_df)
-        n_bars = len(history_df) // s
-        k = n_bars % b
-        need = (max(self.lags) + 1) * b + k  # enough completed days for the features
-        tail = history_df.iloc[-min(need, n_bars) * s :] if n_bars else history_df
-        rv, today = daily_rv(tail, self.profile_, self.min_coverage)
-        n_days = n_bars // b
-        key_ts = history_df["ts"].iat[(n_days * b - 1) * s] if n_days else None
-        if self.cache_ is not None and self.cache_[:2] == (n_days, key_ts):
-            return self.cache_[2], today
-        if len(rv):
-            feats = har_features(rv, self.lags)[-1]
-        else:
-            feats = np.full((len(self.lags), s), np.nan)
+    def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
+        feats = har_features(rv, self.lags)[-1]  # (L, S)
         with np.errstate(divide="ignore", invalid="ignore"):
             z = self.coef_[:, 0] + (self.coef_[:, 1:] * np.log(feats).T).sum(axis=1)
-        fc = np.exp(z) * self.smear_
-        self.cache_ = (n_days, key_ts, fc)
-        return fc, today
+        return np.exp(z) * self.smear_
 
-    def predict(self, history_df: pd.DataFrame, horizon: int) -> pd.DataFrame:
-        if horizon > bars_per_session(history_df):
-            raise ValueError("HAR forecasts at most one session ahead")
-        fc_day, today = self._today_forecast(history_df)
-        k = len(today)
-        share = self.profile_ / self.profile_.sum(axis=0, keepdims=True)
-        yhat = fc_day * _window_profile(share, k, horizon)
-        if k and self.intraday_beta:
-            observed = ~np.isnan(today)
-            expected = fc_day * (observed * share[:k]).sum(axis=0)
-            realized = np.where(observed, today, 0.0).sum(axis=0)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                ratio = np.clip(realized / expected, 0.25, 4.0)
-            adj = np.where(np.isfinite(ratio), ratio**self.intraday_beta, 1.0)
-            yhat = yhat * adj
-        return self.forecast_frame(history_df, yhat)
+
+class ARMALogRV(DailyComponentModel):
+    """ARMA(p, q) on log daily RV per symbol (statsmodels), with a lognormal mean correction."""
+
+    def __init__(
+        self,
+        name: str = "arma_logrv",
+        order: tuple[int, int] = (1, 1),
+        intraday_beta: float = 0.0,
+        pooled_seasonality: bool = True,
+        min_coverage: float = 0.8,
+    ) -> None:
+        super().__init__(name, intraday_beta, pooled_seasonality, min_coverage)
+        self.order = tuple(order)
+        self.history_days = 60
+
+    def _fit_daily(self, rv: np.ndarray) -> None:
+        import warnings
+
+        from statsmodels.tsa.arima.model import ARIMA
+
+        self.results_ = []
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for j in range(rv.shape[1]):
+                y = np.log(rv[:, j])
+                y = np.where(np.isfinite(y), y, np.nan)  # statsmodels handles NaN as missing
+                p, q = self.order
+                res = ARIMA(y, order=(p, 0, q), trend="c").fit()
+                self.results_.append(res)
+
+    def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
+        import warnings
+
+        out = np.full(rv.shape[1], np.nan)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for j, res in enumerate(self.results_):
+                y = np.log(rv[:, j])
+                y = np.where(np.isfinite(y), y, np.nan)
+                fc = res.apply(y).get_forecast(1)
+                out[j] = np.exp(fc.predicted_mean[0] + 0.5 * fc.var_pred_mean[0])
+        return out

@@ -26,14 +26,17 @@ walk_forward:
 baseline: naive
 models:
   # rung 1: baselines
-  - {name: naive, type: random_walk}
-  - {name: hist_mean, type: historical_mean}
-  - {name: seasonal_mean_5d, type: seasonal_naive, params: {n_sessions: 5}}
-  # rung 2a: EWMA and HAR (daily level x time-of-day profile)
-  - {name: ewma_hl1, type: ewma, params: {halflife_sessions: 1.0}}
-  - {name: ewma_hl5, type: ewma, params: {halflife_sessions: 5.0}}
-  - {name: har, type: har, params: {pooled: false}}
-  - {name: har_pooled, type: har, params: {pooled: true}}
-  - {name: har_mix, type: har, params: {pooled: true, intraday_beta: 0.5}}
+  - {name: naive, type: random_walk, rung: 1}
+  - {name: hist_mean, type: historical_mean, rung: 1}
+  - {name: seasonal_mean_5d, type: seasonal_naive, rung: 1, params: {n_sessions: 5}}
+  # rung 2: classical. Daily level x time-of-day profile (x intraday correction)
+  - {name: ewma_hl1, type: ewma, rung: 2, params: {halflife_sessions: 1.0}}
+  - {name: ewma_hl5, type: ewma, rung: 2, params: {halflife_sessions: 5.0}}
+  - {name: har, type: har, rung: 2, params: {pooled: false}}
+  - {name: har_pooled, type: har, rung: 2, params: {pooled: true}}
+  - {name: har_mix, type: har, rung: 2, params: {pooled: true, intraday_beta: 0.5}}
+  - {name: arma_logrv_mix, type: arma_logrv, rung: 2, params: {order: [1, 1], intraday_beta: 0.5}}
+  - {name: garch, type: garch, rung: 2, params: {asymmetric: false}}
+  - {name: gjr_garch, type: garch, rung: 2, params: {asymmetric: true}}
 
 output_dir: results/rv_ladder
