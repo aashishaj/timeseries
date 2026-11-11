@@ -52,12 +52,13 @@ def test_zero_forecasts_are_floored_and_counted():
     assert s.loc["bad", "floored"] > 0 and np.isfinite(s.loc["bad", "QLIKE"])
 
 
-def test_each_rung_is_compared_to_best_of_previous_rung():
-    ev = evaluate(_forecasts(), rungs={"naive": 1, "bad": 1, "good": 2})
+def test_each_rung_is_compared_to_best_of_all_lower_rungs():
+    ev = evaluate(_forecasts(), rungs={"naive": 1, "bad": 2, "good": 3})
     s = ev.summary.set_index("model")
-    assert s.loc["good", "prev_rung_best"] == "naive"  # best of rung 1, not "bad"
-    assert s.loc["good", "QLIKE_vs_prev_rung"] == pytest.approx(
+    assert s.loc["good", "best_lower_rung"] == "naive"  # best of rungs 1-2, not "bad"
+    assert s.loc["good", "QLIKE_vs_lower_rungs"] == pytest.approx(
         s.loc["good", "QLIKE"] / s.loc["naive", "QLIKE"]
     )
-    assert s.loc["good", "DM_p_vs_prev_rung"] < 0.05
-    assert pd.isna(s.loc["naive", "prev_rung_best"])
+    assert s.loc["good", "DM_p_vs_lower_rungs"] < 0.05
+    assert s.loc["bad", "best_lower_rung"] == "naive"
+    assert pd.isna(s.loc["naive", "best_lower_rung"])

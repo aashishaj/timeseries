@@ -41,5 +41,23 @@ models:
   # rung 3: ML. Anchor (5-session RV x time-of-day share) x boosted correction from
   # realized measures, range estimators, ATR, Bollinger width, RSI, volume, time
   - {name: lgbm, type: lightgbm, rung: 3}
+  # rung 5: our own mixes (rung 4 is reserved for deep / foundation models).
+  # Geometric combination of the best intraday and best daily models.
+  - name: combo_equal
+    type: combination
+    rung: 5
+    params:
+      method: equal
+      members: &combo_members
+        - {type: lightgbm}
+        - {type: garch}
+        - {type: arma_logrv, params: {order: [1, 1], intraday_beta: 0.5}}
+        - {type: har, params: {pooled: true, intraday_beta: 0.5}}
+  - name: combo_opt
+    type: combination
+    rung: 5
+    params:
+      method: qlike_opt       # weights + bias fitted on the last 10 training sessions
+      members: *combo_members
 
 output_dir: results/rv_ladder

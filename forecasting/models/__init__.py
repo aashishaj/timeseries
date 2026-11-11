@@ -5,6 +5,7 @@ from __future__ import annotations
 from forecasting.models.base import ForecastModel
 from forecasting.models.baselines import HistoricalMean, RandomWalk, SeasonalNaive
 from forecasting.models.classical import HAR, ARMALogRV, SeasonalEWMA
+from forecasting.models.ensemble import Combination
 from forecasting.models.garch import SeasonalGARCH
 from forecasting.models.ml import LightGBMRV
 
@@ -17,6 +18,7 @@ MODEL_REGISTRY: dict[str, type[ForecastModel]] = {
     "arma_logrv": ARMALogRV,
     "garch": SeasonalGARCH,
     "lightgbm": LightGBMRV,
+    "combination": Combination,
 }
 
 
@@ -33,6 +35,7 @@ def build_model(type_: str, name: str | None = None, params: dict | None = None)
 
 __all__ = [
     "ARMALogRV",
+    "Combination",
     "MODEL_REGISTRY",
     "ForecastModel",
     "HAR",

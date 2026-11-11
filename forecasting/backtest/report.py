@@ -22,8 +22,8 @@ SUMMARY_COLUMNS = [
     ("DM_stat", "DM stat", "+.2f"),
     ("DM_p", "DM p", ".3g"),
     ("symbols_beating_naive", "beats naive (symbols)", None),
-    ("QLIKE_vs_prev_rung", "QLIKE / best of prev rung", ".3f"),
-    ("DM_p_vs_prev_rung", "p vs prev rung", ".3g"),
+    ("QLIKE_vs_lower_rungs", "QLIKE / best lower rung", ".3f"),
+    ("DM_p_vs_lower_rungs", "p vs best lower rung", ".3g"),
 ]
 
 
@@ -92,7 +92,7 @@ How to read this:
   the cross-sectional mean loss per origin and Newey-West errors. Vol forecast errors are
   persistent, so treat borderline p-values with caution.
 * beats naive (symbols): symbols where the model's mean QLIKE is below naive's.
-* QLIKE / best of prev rung: against the lowest-QLIKE model of the rung below, on the
+* QLIKE / best lower rung: against the lowest-QLIKE model of all lower rungs, on the
   same sample, with its DM p-value. The ladder rule is that this must be < 1.
 * Best QLIKE per horizon in bold.
 """
@@ -171,8 +171,8 @@ LEADERBOARD_COLUMNS = [
     "DM_p",
     "symbols_beating_naive",
     "rung",
-    "QLIKE_vs_prev_rung",
-    "DM_p_vs_prev_rung",
+    "QLIKE_vs_lower_rungs",
+    "DM_p_vs_lower_rungs",
     "git",
 ]
 
