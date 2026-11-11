@@ -97,8 +97,15 @@ def generate_candles(
         )
     df = pd.concat(frames, ignore_index=True)
     if dirty:
-        df = _add_dirt(df, rng, calendar, sessions, missing_minute_prob,
-                       gap_blocks_per_symbol, outage_days_per_symbol)
+        df = _add_dirt(
+            df,
+            rng,
+            calendar,
+            sessions,
+            missing_minute_prob,
+            gap_blocks_per_symbol,
+            outage_days_per_symbol,
+        )
     df["latency_ms"] = rng.gamma(2.0, 20.0, len(df))  # mimics the live pipeline's extra columns
     df["date"] = df["timestamp"].dt.strftime("%Y-%m-%d")
     return df.sort_values(["symbol", "timestamp"], kind="stable").reset_index(drop=True)
@@ -124,9 +131,12 @@ def _add_dirt(
             d = sessions[rng.integers(len(sessions))]
             first = 555 + rng.integers(0, 330)
             span = rng.integers(10, 45)
-            drop |= is_sym & (day == d).to_numpy() & (minute >= first).to_numpy() & (
-                minute < first + span
-            ).to_numpy()
+            drop |= (
+                is_sym
+                & (day == d).to_numpy()
+                & (minute >= first).to_numpy()
+                & (minute < first + span).to_numpy()
+            )
     df = df.loc[~drop]
 
     extras = [df.sample(frac=0.0005, random_state=int(rng.integers(1 << 31)))]  # duplicates

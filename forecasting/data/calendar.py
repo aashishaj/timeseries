@@ -106,7 +106,8 @@ class NSECalendar:
     def bars_per_session(self, bar_minutes: int) -> int:
         if bar_minutes <= 0 or self.session_minutes % bar_minutes:
             raise ValueError(
-                f"bar_minutes={bar_minutes} does not divide the {self.session_minutes}-minute session"
+                f"bar_minutes={bar_minutes} does not divide the "
+                f"{self.session_minutes}-minute session"
             )
         return self.session_minutes // bar_minutes
 
@@ -166,4 +167,3 @@ class NSECalendar:
     def describe(self, day) -> str:
         d = to_date(day)
         return self.names.get(d, "")
-

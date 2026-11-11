@@ -69,9 +69,7 @@ class BuildReport:
             return ", ".join(shown) + (f", ... (+{len(ds) - 10})" if len(ds) > 10 else "")
 
         if self.special_session_dates:
-            lines.append(
-                f"- known special sessions ignored: {_dates(self.special_session_dates)}"
-            )
+            lines.append(f"- known special sessions ignored: {_dates(self.special_session_dates)}")
         if self.unexpected_dates:
             lines.append(
                 "- **data on dates the calendar says are closed** (check nse_calendar.yaml): "
