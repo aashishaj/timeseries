@@ -9,7 +9,7 @@ build/
 .ipynb_checkpoints/
 
 # local data: never commit candle exports or generated synthetic data
-data/
+/data/
 
 # run outputs: keep the markdown summaries, ignore bulky artifacts
 results/**/forecasts.parquet
