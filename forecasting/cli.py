@@ -98,8 +98,11 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         "data_root": str(cfg.data_root),
         "symbols": ", ".join(panel.attrs["symbols"]),
         "sessions": f"{report.n_sessions} ({report.first_session} -> {report.last_session})",
-        "models": ", ".join(
-            f"{m['name']} ({m['type']} {m.get('params') or ''})".strip() for m in specs
+        "models": "; ".join(
+            m["name"]
+            + f" = {m['type']}"
+            + "".join(f", {k}={v}" for k, v in (m.get("params") or {}).items())
+            for m in specs
         ),
     }
     path = write_results(

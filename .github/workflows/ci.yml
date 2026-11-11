@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --frozen
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Tests (incl. lookahead-leakage tests)
+        run: uv run pytest -q
+      - name: Synthetic end-to-end backtest
+        run: |
+          uv run forecasting synth --out data/synthetic
+          uv run forecasting backtest --data-root data/synthetic --out results/ci \
+            --title "CI: baselines on synthetic data (pipeline check, not market evidence)"
+      - name: Publish results table to the run summary
+        if: always()
+        run: |
+          if [ -f results/ci/results.md ]; then cat results/ci/results.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-results
+          path: results/ci/
