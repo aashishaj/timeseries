@@ -6,6 +6,7 @@ from forecasting.models.base import ForecastModel
 from forecasting.models.baselines import HistoricalMean, RandomWalk, SeasonalNaive
 from forecasting.models.classical import HAR, ARMALogRV, SeasonalEWMA
 from forecasting.models.garch import SeasonalGARCH
+from forecasting.models.ml import LightGBMRV
 
 MODEL_REGISTRY: dict[str, type[ForecastModel]] = {
     "random_walk": RandomWalk,
@@ -15,6 +16,7 @@ MODEL_REGISTRY: dict[str, type[ForecastModel]] = {
     "har": HAR,
     "arma_logrv": ARMALogRV,
     "garch": SeasonalGARCH,
+    "lightgbm": LightGBMRV,
 }
 
 
@@ -35,6 +37,7 @@ __all__ = [
     "ForecastModel",
     "HAR",
     "HistoricalMean",
+    "LightGBMRV",
     "RandomWalk",
     "SeasonalEWMA",
     "SeasonalGARCH",

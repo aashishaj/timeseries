@@ -8,6 +8,7 @@ from forecasting.models import (
     HAR,
     ARMALogRV,
     HistoricalMean,
+    LightGBMRV,
     RandomWalk,
     SeasonalEWMA,
     SeasonalGARCH,
@@ -110,6 +111,7 @@ def test_history_is_complete_up_to_origin():
         HAR(lags=(1, 2), pooled=True, intraday_beta=0.5),
         ARMALogRV(order=(1, 0), intraday_beta=0.5),
         SeasonalGARCH(asymmetric=True, min_obs=20),
+        LightGBMRV(n_estimators=10, min_child_samples=5, tail_sessions=3),
     ],
     ids=lambda m: repr(m),
 )

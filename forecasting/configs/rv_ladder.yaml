@@ -38,5 +38,8 @@ models:
   - {name: arma_logrv_mix, type: arma_logrv, rung: 2, params: {order: [1, 1], intraday_beta: 0.5}}
   - {name: garch, type: garch, rung: 2, params: {asymmetric: false}}
   - {name: gjr_garch, type: garch, rung: 2, params: {asymmetric: true}}
+  # rung 3: ML. Anchor (5-session RV x time-of-day share) x boosted correction from
+  # realized measures, range estimators, ATR, Bollinger width, RSI, volume, time
+  - {name: lgbm, type: lightgbm, rung: 3}
 
 output_dir: results/rv_ladder

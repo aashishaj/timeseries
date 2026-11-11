@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "arch>=7",
+    "lightgbm>=4",
     "numpy>=1.26",
     "pandas>=2.2",
     "pyarrow>=15",
