@@ -1,0 +1,10 @@
+# Zerodha equity INTRADAY (MIS) charges, per executed order side.
+# VERIFY against https://zerodha.com/charges before trusting P&L numbers.
+brokerage_rate: 0.0003        # 0.03% of order value ...
+brokerage_cap_inr: 20         # ... or Rs 20, whichever is lower
+stt_sell_rate: 0.00025        # STT 0.025% on the sell side
+exchange_rate: 0.0000297      # NSE transaction charge
+sebi_rate: 0.000001           # Rs 10 per crore
+stamp_buy_rate: 0.00003       # stamp duty 0.003% on the buy side
+gst_rate: 0.18                # on brokerage + exchange + SEBI charges
+slippage_bps: 2.0             # assumed per side; fills are simulated at open/close prices

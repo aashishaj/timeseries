@@ -180,6 +180,34 @@ def _log_lockbox_opening(folder: Path, experiment: str, label: str, specs: list[
     pd.concat([previous, row], ignore_index=True).to_csv(path, index=False)
 
 
+def cmd_papertrade(args: argparse.Namespace) -> int:
+    from forecasting.trading.costs import CostModel
+    from forecasting.trading.vol_target import VolTargetConfig, vol_target_backtest
+
+    cfg = load_config(args.config, data_root=args.data_root)
+    results = Path(args.results)
+    forecasts = pd.read_parquet(results / "forecasts.parquet")
+    forecasts = forecasts[forecasts["horizon"] == args.horizon]
+    if args.model:
+        forecasts = forecasts[forecasts["model"].isin(args.model)]
+    if forecasts.empty:
+        raise SystemExit(f"no {args.horizon} forecasts in {results}/forecasts.parquet")
+    panel, _ = load_panel(cfg)
+    vt = VolTargetConfig(
+        target_annual_vol=args.target_vol,
+        capital_inr=args.capital,
+        max_gross_leverage=args.max_gross,
+    )
+    result = vol_target_backtest(panel, forecasts, vt, CostModel.from_yaml(args.costs))
+    md = result.to_markdown(vt)
+    print(md)
+    out = Path(args.out) if args.out else results / "paper_trading.md"
+    out.write_text(md + "\n")
+    result.daily.to_csv(out.with_suffix(".csv"))
+    log.info("paper trading report written to %s", out)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="forecasting", description=__doc__)
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -220,6 +248,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="trial log to append to ('' to disable)",
     )
     p.set_defaults(func=cmd_backtest)
+
+    p = sub.add_parser(
+        "papertrade", help="simulate volatility-targeted intraday trading from backtest forecasts"
+    )
+    p.add_argument("--config", default=DEFAULT_EXPERIMENT)
+    p.add_argument("--data-root", default=None, help="overrides data.root in the config")
+    p.add_argument("--results", required=True, help="backtest output dir (forecasts.parquet)")
+    p.add_argument("--horizon", default="next_session")
+    p.add_argument("--model", action="append", help="only these models (repeatable)")
+    p.add_argument("--target-vol", type=float, default=0.15, help="annualized, e.g. 0.15")
+    p.add_argument("--capital", type=float, default=1_000_000.0, help="INR")
+    p.add_argument("--max-gross", type=float, default=2.0, help="gross exposure cap")
+    p.add_argument("--costs", default=None, help="cost YAML (default configs/costs.yaml)")
+    p.add_argument("--out", default=None)
+    p.set_defaults(func=cmd_papertrade)
     return parser
 
 
