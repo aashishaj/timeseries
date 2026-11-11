@@ -24,12 +24,22 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
       time-of-day x intraday correction)
 - [x] Rung 2b: GARCH / GJR on seasonally filtered returns, ARMA(1,1) on log daily RV
 - [x] Compare each rung against the best of the previous rung (ratio + DM p-value)
-- [ ] Rung 3: indicators (ATR, range-based vol, Bollinger width, volume, RSI) + LightGBM
+- [x] Rung 3: indicators (ATR, range-based vol, Bollinger width, volume, RSI) + LightGBM
 - [ ] Ensembles with weights from past forecast errors only
 - [ ] Simulated paper trading with NSE costs (vol targeting)
 - [ ] Rung 4: deep / foundation models (CPU only; Chronos weights need network access)
 
 ## Log
+
+### 2026-11-11, round 3
+- Indicator library (18 finite-window indicators, all lookahead-tested) and a pooled
+  LightGBM model: HAR-like anchor x boosted correction, gamma objective (= QLIKE).
+- Synthetic dev results (QLIKE vs naive; vs best of previous rung, DM p):
+  - 30min: lgbm 0.412 (0.89 x garch, p~1e-100): rung 3 passes.
+  - next_session: lgbm 0.663 (1.03 x arma_logrv_mix, p=0.21): rung 3 does NOT pass.
+    Only ~1-2k daily training rows; not tuned further to avoid fitting the dev split.
+- Next: forecast combinations (best daily + best intraday models), weights from past
+  errors only.
 
 ### 2026-11-11, round 2
 - GARCH(1,1) / GJR on de-seasonalized returns; ARMA(1,1) on log daily RV (with the

@@ -4,8 +4,8 @@
 - data: synthetic (data/synthetic)
 - split: dev: scored sessions 2025-03-27 -> 2025-11-03; last 40 sessions held out
 - symbols: RELIANCE, HDFCBANK, ICICIBANK, INFY, TCS, BHARTIARTL, SBIN, ITC, LT, KOTAKBANK
-- models: naive = random_walk; hist_mean = historical_mean; seasonal_mean_5d = seasonal_naive, n_sessions=5; ewma_hl1 = ewma, halflife_sessions=1.0; ewma_hl5 = ewma, halflife_sessions=5.0; har = har, pooled=False; har_pooled = har, pooled=True; har_mix = har, intraday_beta=0.5, pooled=True; arma_logrv_mix = arma_logrv, intraday_beta=0.5, order=[1, 1]; garch = garch, asymmetric=False; gjr_garch = garch, asymmetric=True
-- git: 429fcd3-dirty
+- models: naive = random_walk; hist_mean = historical_mean; seasonal_mean_5d = seasonal_naive, n_sessions=5; ewma_hl1 = ewma, halflife_sessions=1.0; ewma_hl5 = ewma, halflife_sessions=5.0; har = har, pooled=False; har_pooled = har, pooled=True; har_mix = har, intraday_beta=0.5, pooled=True; arma_logrv_mix = arma_logrv, intraday_beta=0.5, order=[1, 1]; garch = garch, asymmetric=False; gjr_garch = garch, asymmetric=True; lgbm = lightgbm
+- git: 6056f28-dirty
 - walk-forward: expanding window, first 60 sessions for training, refit every 5 sessions
 
 ## Results vs naive
@@ -25,8 +25,9 @@
 | har_pooled | 0.3382 | 0.548 | 0.029 | 0.678 | 0.828 | -31.16 | 4.33e-213 | 10/10 | 0.861 | 9.99e-33 |
 | har_mix | 0.2926 | 0.474 | 0.02554 | 0.597 | 0.769 | -40.39 | 0 | 10/10 | 0.745 | 1.56e-77 |
 | arma_logrv_mix | 0.2896 | 0.469 | 0.02518 | 0.588 | 0.774 | -40.74 | 0 | 10/10 | 0.737 | 7.58e-80 |
-| garch | **0.2855** | 0.463 | 0.02467 | 0.576 | 0.782 | -42.93 | 0 | 10/10 | 0.727 | 3.65e-82 |
+| garch | 0.2855 | 0.463 | 0.02467 | 0.576 | 0.782 | -42.93 | 0 | 10/10 | 0.727 | 3.65e-82 |
 | gjr_garch | 0.2857 | 0.463 | 0.0247 | 0.577 | 0.782 | -42.91 | 0 | 10/10 | 0.727 | 5.89e-82 |
+| lgbm | **0.2541** | 0.412 | 0.02225 | 0.520 | 0.730 | -45.72 | 0 | 10/10 | 0.890 | 1.41e-100 |
 
 Forecast coverage below 100%: ewma_hl1 98.8%, ewma_hl5 99.3%, har 99.1%, har_pooled 99.1%, har_mix 99.1%
 
@@ -47,6 +48,7 @@ Forecast coverage below 100%: ewma_hl1 98.8%, ewma_hl5 99.3%, har 99.1%, har_poo
 | arma_logrv_mix | **0.1088** | 0.645 | 1.659 | 0.657 | 0.814 | -9.12 | 7.44e-20 | 10/10 | 0.922 | 0.000247 |
 | garch | 0.1372 | 0.814 | 1.989 | 0.788 | 0.911 | -4.25 | 2.17e-05 | 10/10 | 1.163 | 0.00159 |
 | gjr_garch | 0.1373 | 0.814 | 1.991 | 0.788 | 0.911 | -4.20 | 2.66e-05 | 10/10 | 1.163 | 0.00173 |
+| lgbm | 0.1119 | 0.663 | 1.66 | 0.657 | 0.814 | -7.36 | 1.81e-13 | 10/10 | 1.028 | 0.211 |
 
 Forecast coverage below 100%: ewma_hl1 98.8%, ewma_hl5 99.3%, har 99.1%, har_pooled 99.1%, har_mix 99.1%
 
