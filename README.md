@@ -17,7 +17,7 @@ Each rung has to beat the one before it, out of sample, against naive.
 | rung | models | status |
 |---|---|---|
 | 1. Baselines | random walk (naive), historical mean, seasonal naive (1 day, 5-day mean) | done |
-| 2. Classical | GARCH family (`arch`), HAR-RV, ARIMA on returns | next |
+| 2. Classical | seasonal EWMA, HAR-RV, HAR x time-of-day x intraday mix (done); GARCH family, ARIMA (next) | in progress |
 | 3. ML | LightGBM on lagged returns / RV / volume / time of day | |
 | 4. Deep / foundation | N-BEATS or PatchTST; zero-shot Chronos / TimesFM | |
 
@@ -146,11 +146,21 @@ experiment YAML. The panel is a balanced grid (see `forecasting/data/panel.py`),
 
 ## Results
 
-* [`results/synthetic/results.md`](results/synthetic/results.md): baselines on
-  **synthetic** data. This checks that the pipeline recovers structure planted in the
-  generator (persistent daily vol, an intraday U-shape). It says nothing about real
-  NSE stocks.
-* Real-data results go to `results/rv_baselines/` once you run on your export.
+* [`results/leaderboard.md`](results/leaderboard.md): every model configuration ever
+  run, losers included, per data set / split / horizon.
+* [`results/synthetic_ladder/results.md`](results/synthetic_ladder/results.md): the full
+  ladder on **synthetic** data (development split). This checks the pipeline and the
+  models on data with known structure. It says nothing about real NSE stocks.
+* Real-data results: `uv run forecasting backtest --config forecasting/configs/rv_ladder.yaml
+  --data-root <export>`.
+
+### The lockbox
+
+The last `holdout_sessions` (40, about two months) are excluded from every development
+run. Iterate on models using the development split only; when a set of models is
+final, score the lockbox once with `backtest --final`. Each opening is logged in
+`results/lockbox_log.csv`, and repeat openings print a warning, because every extra
+look turns the lockbox into another development set.
 
 ## Checking from a phone
 

@@ -3,7 +3,9 @@
 Used for tests, CI and demos when the real export is not at hand. The generator has
 known structure, so it doubles as a sanity check of the pipeline:
 
-* persistent daily volatility (market factor + idiosyncratic, log-AR(1));
+* persistent daily volatility (market factor + idiosyncratic, log-AR(1)), plus
+  unpredictable shocks: surprise high-vol "news" days and price jumps;
+* a mild weekly-expiry (Tuesday) volatility bump;
 * an intraday U-shape (busy open, quiet lunch, pick-up into the close);
 * slowly varying intraday volatility, Student-t returns, tick-size rounding;
 * realistic dirt: missing minutes, multi-minute gaps, whole-day outages,
@@ -62,6 +64,7 @@ def generate_candles(
     n_days, n_min, n_sub = len(sessions), calendar.session_minutes, 4
     shape = intraday_shape(n_min)
     market = _ar1(rng, (n_days,), 0.97, 0.06)
+    is_expiry = np.array([d.weekday() == 1 for d in sessions])
     open_minute = calendar.open_time.hour * 60 + calendar.open_time.minute
     day_ns = np.array([np.datetime64(d, "m") for d in sessions])
     stamps = day_ns[:, None] + np.arange(open_minute, open_minute + n_min).astype("timedelta64[m]")
@@ -70,11 +73,15 @@ def generate_candles(
     for symbol in symbols:
         daily_vol = rng.uniform(1.1, 2.0)  # percent per day
         log_v = 2 * np.log(daily_vol) + 2 * market + 2 * _ar1(rng, (n_days,), 0.85, 0.07)
+        log_v = log_v + np.log(2.5) * (rng.random(n_days) < 1 / 25)  # surprise news days
+        log_v = log_v + np.log(1.2) * is_expiry  # weekly expiry (Tuesday)
         intraday = _ar1(rng, (n_days, n_min), 0.985, 0.4 * np.sqrt(1 - 0.985**2))
         var_min = np.exp(log_v)[:, None] / n_min * shape * np.exp(intraday - 0.08)  # %^2
         z = rng.standard_t(5, (n_days, n_min, n_sub)) / np.sqrt(5 / 3)
         steps = z * np.sqrt(var_min[..., None] / n_sub) / 100.0
         steps[:, 0, 0] += rng.normal(0.0, 0.4 * np.exp(log_v / 2) / 100.0)  # overnight gap
+        jumps = rng.random((n_days, n_min)) < 1 / (15 * n_min)  # ~1 jump per 15 sessions
+        steps[..., 0] += jumps * rng.normal(0.0, 6.0 * np.sqrt(var_min) / 100.0)
         log_p = np.log(rng.uniform(300, 3000)) + np.cumsum(steps.ravel()).reshape(steps.shape)
         price = np.round(np.exp(log_p) / TICK) * TICK
         volume = (

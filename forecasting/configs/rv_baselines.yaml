@@ -21,6 +21,7 @@ walk_forward:
   initial_train_sessions: 60   # ~3 months before the first forecast
   test_block_sessions: 5       # refit weekly
   window: expanding            # or: rolling (+ rolling_train_sessions)
+  holdout_sessions: 40         # LOCKBOX: last ~2 months, untouched until `backtest --final`
 
 baseline: naive
 models:

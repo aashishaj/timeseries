@@ -148,3 +148,82 @@ def write_results(
     path = out / "results.md"
     path.write_text("\n".join(lines) + "\n")
     return path
+
+
+LEADERBOARD_COLUMNS = [
+    "run_at",
+    "experiment",
+    "data",
+    "split",
+    "horizon",
+    "model",
+    "model_spec",
+    "n_obs",
+    "QLIKE",
+    "QLIKE_vs_naive",
+    "MSE_vs_naive",
+    "MASE",
+    "DM_stat",
+    "DM_p",
+    "symbols_beating_naive",
+    "git",
+]
+
+
+def append_leaderboard(
+    path: str | Path,
+    evaluation: Evaluation,
+    *,
+    experiment: str,
+    data: str,
+    split: str,
+    model_specs: dict[str, str],
+    run_at: str,
+) -> pd.DataFrame:
+    """Append one row per (horizon, model) to the trial log and rewrite its markdown view.
+
+    Every run is kept, including losers: the number of configurations tried is what
+    tells you how much a "best" result may owe to luck.
+    """
+    path = Path(path)
+    rows = evaluation.summary.assign(
+        run_at=run_at,
+        experiment=experiment,
+        data=data,
+        split=split,
+        model_spec=evaluation.summary["model"].map(model_specs),
+        git=git_revision(),
+    )[LEADERBOARD_COLUMNS]
+    if path.exists():
+        rows = pd.concat([pd.read_csv(path), rows], ignore_index=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows.to_csv(path, index=False)
+    path.with_suffix(".md").write_text(leaderboard_markdown(rows))
+    return rows
+
+
+def leaderboard_markdown(log: pd.DataFrame) -> str:
+    lines = [
+        "# Leaderboard",
+        "",
+        "Latest result per model configuration. `trials` counts every distinct configuration",
+        "ever run on that data/split/horizon (losers included). The more trials, the more",
+        "a top result may be luck, so the lockbox (`split = final`) is the number that counts.",
+        "",
+    ]
+    for (data, split, horizon), g in log.groupby(["data", "split", "horizon"], sort=True):
+        latest = g.drop_duplicates("model_spec", keep="last").sort_values("QLIKE_vs_naive")
+        lines += [
+            f"## {data} / {split} / {horizon} ({latest['model_spec'].nunique()} trials)",
+            "",
+            "| model | QLIKE / naive | MSE / naive | MASE | DM p | beats naive | spec | run |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        for r in latest.itertuples():
+            lines.append(
+                f"| {r.model} | {r.QLIKE_vs_naive:.3f} | {r.MSE_vs_naive:.3f} | {r.MASE:.3f} "
+                f"| {_fmt(r.DM_p, '.2g')} | {r.symbols_beating_naive} | `{r.model_spec}` "
+                f"| {r.run_at} |"
+            )
+        lines.append("")
+    return "\n".join(lines)

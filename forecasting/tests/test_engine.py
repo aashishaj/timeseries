@@ -4,7 +4,7 @@ import pytest
 
 from forecasting.backtest.engine import Horizon, WalkForward, make_folds, run_walk_forward
 from forecasting.data.panel import to_matrix
-from forecasting.models import HistoricalMean, RandomWalk, SeasonalNaive
+from forecasting.models import HAR, HistoricalMean, RandomWalk, SeasonalEWMA, SeasonalNaive
 from forecasting.models.base import ForecastModel
 from forecasting.tests.conftest import make_toy_panel
 
@@ -91,7 +91,18 @@ def test_history_is_complete_up_to_origin():
             assert last_seen.date() < origin.date()
 
 
-@pytest.mark.parametrize("model", [RandomWalk(), HistoricalMean(), SeasonalNaive(n_sessions=2)])
+@pytest.mark.parametrize(
+    "model",
+    [
+        RandomWalk(),
+        HistoricalMean(),
+        SeasonalNaive(n_sessions=2),
+        SeasonalEWMA(halflife_sessions=1.0),
+        HAR(lags=(1, 2), pooled=False),
+        HAR(lags=(1, 2), pooled=True, intraday_beta=0.5),
+    ],
+    ids=lambda m: repr(m),
+)
 @pytest.mark.parametrize("horizon", [H_INTRA, H_SESSION])
 def test_poisoning_the_future_does_not_change_past_forecasts(model, horizon):
     panel = make_toy_panel(n_sessions=14, seed=5)

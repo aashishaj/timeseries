@@ -76,6 +76,7 @@ class WalkForward:
     window: Literal["expanding", "rolling"] = "expanding"
     rolling_train_sessions: int | None = None
     max_folds: int | None = None
+    holdout_sessions: int = 0  # lockbox: final sessions kept out of development runs
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,38 @@ def make_folds(n_sessions: int, wf: WalkForward) -> list[Fold]:
             f"{wf.initial_train_sessions}"
         )
     return folds
+
+
+def development_panel(panel: pd.DataFrame, wf: WalkForward) -> pd.DataFrame:
+    """Development view of the data: the panel without the last ``holdout_sessions``.
+
+    The lockbox is scored only by :func:`lockbox_walk_forward`, ideally once, at the end.
+    """
+    s, b = n_symbols(panel), bars_per_session(panel)
+    n_sessions = len(panel) // (s * b)
+    if wf.holdout_sessions <= 0:
+        return panel
+    keep = n_sessions - wf.holdout_sessions
+    if keep <= wf.initial_train_sessions:
+        raise ValueError(
+            f"{n_sessions} sessions leave no development test period after holding out "
+            f"{wf.holdout_sessions} and training on {wf.initial_train_sessions}"
+        )
+    return panel.iloc[: keep * s * b]
+
+
+def lockbox_walk_forward(panel: pd.DataFrame, wf: WalkForward) -> WalkForward:
+    """Walk-forward spec whose test blocks cover exactly the lockbox sessions."""
+    if wf.holdout_sessions <= 0:
+        raise ValueError("no lockbox configured (walk_forward.holdout_sessions is 0)")
+    n_sessions = len(panel) // (n_symbols(panel) * bars_per_session(panel))
+    return WalkForward(
+        initial_train_sessions=n_sessions - wf.holdout_sessions,
+        test_block_sessions=wf.test_block_sessions,
+        window=wf.window,
+        rolling_train_sessions=wf.rolling_train_sessions,
+        holdout_sessions=wf.holdout_sessions,
+    )
 
 
 def run_walk_forward(

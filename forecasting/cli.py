@@ -10,9 +10,18 @@ from pathlib import Path
 
 import pandas as pd
 
-from forecasting.backtest.engine import run_walk_forward
+from forecasting.backtest.engine import (
+    development_panel,
+    lockbox_walk_forward,
+    run_walk_forward,
+)
 from forecasting.backtest.evaluate import evaluate
-from forecasting.backtest.report import LEGEND, summary_markdown, write_results
+from forecasting.backtest.report import (
+    LEGEND,
+    append_leaderboard,
+    summary_markdown,
+    write_results,
+)
 from forecasting.config import DEFAULT_EXPERIMENT, ExperimentConfig, load_config
 from forecasting.data.loader import load_candles
 from forecasting.data.resample import BuildReport, build_bars
@@ -70,6 +79,17 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 1 if (problems and args.strict) else 0
 
 
+def model_spec_string(spec: dict) -> str:
+    params = "".join(f", {k}={v}" for k, v in sorted((spec.get("params") or {}).items()))
+    return f"{spec['type']}{params}"
+
+
+def data_label(root: Path) -> str:
+    from forecasting.data.synthetic import MARKER
+
+    return "synthetic" if (Path(root) / MARKER).exists() else f"real:{Path(root).name}"
+
+
 def cmd_backtest(args: argparse.Namespace) -> int:
     cfg = load_config(args.config, data_root=args.data_root)
     wf = cfg.walk_forward
@@ -81,6 +101,14 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         specs = [m for m in cfg.models if m["name"] == cfg.baseline] + specs
 
     panel, report = load_panel(cfg)
+    label = data_label(cfg.data_root)
+    if args.final:
+        split = "final"
+        wf = lockbox_walk_forward(panel, wf)
+        _log_lockbox_opening(Path(args.leaderboard).parent, cfg.name, label, specs)
+    else:
+        split = "dev"
+        panel = development_panel(panel, wf)
     outputs = []
     for h in horizons:
         for spec in specs:
@@ -93,21 +121,18 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     print(summary_markdown(evaluation, hmap))
     print(LEGEND)
     out_dir = Path(args.out) if args.out else cfg.output_dir
+    first, last = forecasts["session"].min(), forecasts["session"].max()
     meta = {
         "experiment": cfg.name,
-        "data_root": str(cfg.data_root),
+        "data": f"{label} ({cfg.data_root})",
+        "split": f"{split}: scored sessions {first} -> {last}"
+        + (" (LOCKBOX)" if args.final else f"; last {wf.holdout_sessions} sessions held out"),
         "symbols": ", ".join(panel.attrs["symbols"]),
-        "sessions": f"{report.n_sessions} ({report.first_session} -> {report.last_session})",
-        "models": "; ".join(
-            m["name"]
-            + f" = {m['type']}"
-            + "".join(f", {k}={v}" for k, v in (m.get("params") or {}).items())
-            for m in specs
-        ),
+        "models": "; ".join(f"{m['name']} = {model_spec_string(m)}" for m in specs),
     }
     path = write_results(
         out_dir,
-        title=args.title or f"{cfg.name}: realized volatility baselines",
+        title=args.title or f"{cfg.name} ({label}, {split})",
         forecasts=forecasts,
         evaluation=evaluation,
         horizons=hmap,
@@ -115,8 +140,43 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         meta=meta,
         quality_markdown=report.to_markdown(cfg.calendar),
     )
+    if args.leaderboard:
+        append_leaderboard(
+            args.leaderboard,
+            evaluation,
+            experiment=cfg.name,
+            data=label,
+            split=split,
+            model_specs={m["name"]: model_spec_string(m) for m in specs},
+            run_at=pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d %H:%M"),
+        )
     log.info("results written to %s", path)
     return 0
+
+
+def _log_lockbox_opening(folder: Path, experiment: str, label: str, specs: list[dict]) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "lockbox_log.csv"
+    previous = pd.read_csv(path) if path.exists() else pd.DataFrame(columns=["data"])
+    opened = int((previous["data"] == label).sum())
+    if opened:
+        log.warning(
+            "the lockbox for %s has been opened %d time(s) before; every extra look "
+            "makes it less of an honest out-of-sample test",
+            label,
+            opened,
+        )
+    row = pd.DataFrame(
+        [
+            {
+                "opened_at": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d %H:%M"),
+                "experiment": experiment,
+                "data": label,
+                "models": "; ".join(f"{m['name']} = {model_spec_string(m)}" for m in specs),
+            }
+        ]
+    )
+    pd.concat([previous, row], ignore_index=True).to_csv(path, index=False)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +208,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", action="append", help="only these models (repeatable)")
     p.add_argument("--max-folds", type=int, default=None, help="cap folds for a quick run")
     p.add_argument("--title", default=None)
+    p.add_argument(
+        "--final",
+        action="store_true",
+        help="score the held-out lockbox sessions (do this rarely; every opening is logged)",
+    )
+    p.add_argument(
+        "--leaderboard",
+        default="results/leaderboard.csv",
+        help="trial log to append to ('' to disable)",
+    )
     p.set_defaults(func=cmd_backtest)
     return parser
 

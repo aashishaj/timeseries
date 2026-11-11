@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from forecasting.models.base import ForecastModel
 from forecasting.models.baselines import HistoricalMean, RandomWalk, SeasonalNaive
+from forecasting.models.classical import HAR, SeasonalEWMA
 
 MODEL_REGISTRY: dict[str, type[ForecastModel]] = {
     "random_walk": RandomWalk,
     "historical_mean": HistoricalMean,
     "seasonal_naive": SeasonalNaive,
+    "ewma": SeasonalEWMA,
+    "har": HAR,
 }
 
 
@@ -26,8 +29,10 @@ def build_model(type_: str, name: str | None = None, params: dict | None = None)
 __all__ = [
     "MODEL_REGISTRY",
     "ForecastModel",
+    "HAR",
     "HistoricalMean",
     "RandomWalk",
+    "SeasonalEWMA",
     "SeasonalNaive",
     "build_model",
 ]

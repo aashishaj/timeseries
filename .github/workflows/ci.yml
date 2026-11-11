@@ -25,8 +25,9 @@ jobs:
       - name: Synthetic end-to-end backtest
         run: |
           uv run forecasting synth --out data/synthetic
-          uv run forecasting backtest --data-root data/synthetic --out results/ci \
-            --title "CI: baselines on synthetic data (pipeline check, not market evidence)"
+          uv run forecasting backtest --config forecasting/configs/rv_ladder.yaml \
+            --data-root data/synthetic --out results/ci --leaderboard "" \
+            --title "CI: model ladder on synthetic data (pipeline check, not market evidence)"
       - name: Publish results table to the run summary
         if: always()
         run: |
