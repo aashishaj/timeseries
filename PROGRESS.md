@@ -10,12 +10,9 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 
 ## Blockers / needs from the owner
 
-- **Real data.** The Kite export is not reachable from the cloud session, and network
-  access to Yahoo Finance was declined. Until one of those changes, everything runs on
-  synthetic data. To get real results, run on a machine with the export:
-  `uv run forecasting backtest --config forecasting/configs/rv_ladder.yaml --data-root <export>`.
-- Paper trading needs real prices for the results to mean anything; it will be built
-  and tested on synthetic data meanwhile.
+- **Real data.** There is no candle export yet. Plan: backfill 1-minute candles with the
+  owner's paid Kite Connect historical API on their Mac, then `run-all` (see
+  REAL_DATA.md). Credentials stay on the Mac.
 
 ## Ladder status
 
@@ -25,11 +22,26 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 - [x] Rung 2b: GARCH / GJR on seasonally filtered returns, ARMA(1,1) on log daily RV
 - [x] Compare each rung against the best of the previous rung (ratio + DM p-value)
 - [x] Rung 3: indicators (ATR, range-based vol, Bollinger width, volume, RSI) + LightGBM
-- [ ] Ensembles with weights from past forecast errors only
-- [ ] Simulated paper trading with NSE costs (vol targeting)
+- [x] Ensembles (equal and QLIKE-optimized geometric combinations): no significant gain
+- [x] Simulated paper trading with NSE costs (vol targeting)
+- [x] Real-data tooling: `kite-login`, `backfill-kite`, `run-all`, REAL_DATA.md
 - [ ] Rung 4: deep / foundation models (CPU only; Chronos weights need network access)
 
 ## Log
+
+### 2026-11-11, round 4
+- Combinations (members: lgbm, garch, arma_logrv_mix, har_mix), synthetic dev:
+  - 30min: combo_opt 0.412 = lgbm (1.00x, p=0.99); combo_equal 1.06x lgbm (worse).
+  - next_session: both combos 0.638 vs arma 0.642 (0.99x, p=0.65/0.87): not significant.
+  - Combinations do not pass the ladder rule here.
+- Paper trading (vol targeting, intraday MIS, Rs 10 lakh):
+  - Daily open-to-close round trips cost ~25-30% of capital per year (STT + slippage
+    dominate): any intraday strategy needs >0.1%/day edge just to break even.
+  - Better forecasts = modestly better risk control (std of return / forecast vol
+    1.03-1.04 vs 1.11 for naive; worst day -0.87% vs -1.00% naive, -1.46% constant).
+  - Sizing assumes perfectly correlated names, so realized vol is ~1/3 of target.
+    Next: lower-turnover vol-managed basket (delivery, banded rebalancing) on real data.
+- Built real-data tooling (Kite backfill/login, run-all). Loop paused until real data.
 
 ### 2026-11-11, round 3
 - Indicator library (18 finite-window indicators, all lookahead-tested) and a pooled

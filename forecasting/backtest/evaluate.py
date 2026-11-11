@@ -163,3 +163,30 @@ def _per_symbol_means(losses: dict, symbols: pd.Index) -> pd.DataFrame:
     out = frame.groupby("symbol").mean()
     out["n_obs"] = frame.groupby("symbol").size()
     return out
+
+
+def plain_accuracy(forecasts: pd.DataFrame) -> pd.DataFrame:
+    """Easy-to-read accuracy per (horizon, model) on the common sample:
+
+    * ``explained``: R^2 between log forecast and log realized variance;
+    * ``median_vol_error``: median |forecast vol / realized vol - 1|;
+    * ``within_25pct``: share of forecasts within +-25% of realized volatility.
+    """
+    rows = []
+    for hname, f in forecasts.groupby("horizon", sort=False):
+        wide = f.pivot_table(index=["origin_ts", "symbol"], columns="model", values="yhat")
+        y = f.groupby(["origin_ts", "symbol"])["y"].first().reindex(wide.index)
+        ok = np.isfinite(y) & (y > 0) & (wide > 0).all(axis=1)
+        for m in dict.fromkeys(f["model"]):
+            fc, yy = wide.loc[ok, m].to_numpy(), y[ok].to_numpy()
+            err = np.abs(np.sqrt(fc / yy) - 1)
+            rows.append(
+                {
+                    "horizon": hname,
+                    "model": m,
+                    "explained": float(np.corrcoef(np.log(yy), np.log(fc))[0, 1] ** 2),
+                    "median_vol_error": float(np.median(err)),
+                    "within_25pct": float(np.mean(err <= 0.25)),
+                }
+            )
+    return pd.DataFrame(rows)

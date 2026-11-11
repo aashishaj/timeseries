@@ -13,6 +13,10 @@ dependencies = [
     "pyyaml>=6",
 ]
 
+[project.optional-dependencies]
+# Only on your own machine, for `forecasting kite-login` / `backfill-kite`.
+kite = ["kiteconnect>=5"]
+
 [project.scripts]
 forecasting = "forecasting.cli:main"
 

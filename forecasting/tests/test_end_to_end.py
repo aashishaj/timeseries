@@ -62,3 +62,41 @@ def test_lockbox_is_excluded_from_development_and_logged(tmp_path, synthetic_exp
     assert set(board["split"]) == {"dev", "final"} and set(board["data"]) == {"synthetic"}
     assert (lb.parent / "lockbox_log.csv").exists()
     assert "trials" in (lb.parent / "leaderboard.md").read_text()
+
+
+def test_run_all_writes_one_report(tmp_path, synthetic_export):
+    (tmp_path / "symbols.yaml").write_text(yaml.safe_dump({"symbols": ["RELIANCE", "INFY"]}))
+    raw = yaml.safe_load((CONFIG_DIR / "rv_ladder.yaml").read_text())
+    raw.update(
+        symbols="symbols.yaml",
+        calendar=str(CONFIG_DIR / "nse_calendar.yaml"),
+        data={"root": str(synthetic_export["root"])},
+        walk_forward={
+            "initial_train_sessions": 20,
+            "test_block_sessions": 5,
+            "holdout_sessions": 10,
+        },
+    )
+    cfg = tmp_path / "ladder.yaml"
+    cfg.write_text(yaml.safe_dump(raw))
+    out = tmp_path / "run"
+    args = [
+        "run-all",
+        "--config",
+        str(cfg),
+        "--out",
+        str(out),
+        "--leaderboard",
+        "",
+        "--model",
+        "naive",
+        "--model",
+        "har_mix",
+        "--model",
+        "ewma_hl1",
+    ]
+    assert main(args) == 0
+    report = (out / "REPORT.md").read_text()
+    assert "## 30min" in report and "## next_session" in report
+    assert "Paper trading" in report and "Data quality" in report
+    assert "explained" in report and "lockbox" in report
