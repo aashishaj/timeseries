@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.ipynb_checkpoints/
+
+# local data: never commit candle exports or generated synthetic data
+data/
+
+# run outputs: keep the markdown summaries, ignore bulky artifacts
+results/**/forecasts.parquet
+results/ci/

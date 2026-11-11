@@ -1,0 +1,88 @@
+# NSE equity cash-market calendar.
+#
+# VERIFY against NSE's official holiday circulars before trusting results:
+#   https://www.nseindia.com/resources/exchange-communication-holidays
+# `forecasting validate` cross-checks this file against your candle export and
+# flags (a) dates with data that this file says are closed and (b) sessions in
+# this file where none of your symbols have any data.
+#
+# holidays:          weekday closures (weekends are closed implicitly)
+# extra_sessions:    weekend dates with a FULL regular 09:15-15:30 session (e.g. Budget day)
+# special_sessions:  known non-regular sessions (Muhurat, DR drills). They are NOT
+#                    modelled; listed only so `validate` can explain their data.
+
+timezone: Asia/Kolkata
+regular_session:
+  open: "09:15"
+  close: "15:30"
+
+years:
+  2024:
+    holidays:
+      2024-01-22: Special holiday (Ram Mandir pran pratishtha)
+      2024-01-26: Republic Day
+      2024-03-08: Mahashivratri
+      2024-03-25: Holi
+      2024-03-29: Good Friday
+      2024-04-11: Id-Ul-Fitr (Ramadan)
+      2024-04-17: Shri Ram Navmi
+      2024-05-01: Maharashtra Day
+      2024-05-20: General Parliamentary Elections (Mumbai)
+      2024-06-17: Bakri Id
+      2024-07-17: Moharram
+      2024-08-15: Independence Day
+      2024-10-02: Mahatma Gandhi Jayanti
+      2024-11-01: Diwali Laxmi Pujan
+      2024-11-15: Gurunanak Jayanti
+      2024-11-20: Maharashtra Assembly Elections
+      2024-12-25: Christmas
+    extra_sessions: {}
+    special_sessions:
+      2024-01-20: Saturday special live session (DR site switchover, non-regular hours)
+      2024-03-02: Saturday special live session (DR site switchover, non-regular hours)
+      2024-11-01: Muhurat trading (evening session)
+
+  2025:
+    holidays:
+      2025-02-26: Mahashivratri
+      2025-03-14: Holi
+      2025-03-31: Id-Ul-Fitr (Ramadan)
+      2025-04-10: Shri Mahavir Jayanti
+      2025-04-14: Dr. Baba Saheb Ambedkar Jayanti
+      2025-04-18: Good Friday
+      2025-05-01: Maharashtra Day
+      2025-08-15: Independence Day
+      2025-08-27: Ganesh Chaturthi
+      2025-10-02: Mahatma Gandhi Jayanti / Dussehra
+      2025-10-21: Diwali Laxmi Pujan
+      2025-10-22: Diwali Balipratipada
+      2025-11-05: Prakash Gurpurb Sri Guru Nanak Dev
+      2025-12-25: Christmas
+    extra_sessions:
+      2025-02-01: Union Budget (Saturday, full session)
+    special_sessions:
+      2025-10-21: Muhurat trading (afternoon session)
+
+  2026:
+    # Least certain year in this file - check it first.
+    holidays:
+      2026-01-15: Maharashtra municipal corporation elections
+      2026-01-26: Republic Day
+      2026-03-03: Holi
+      2026-03-26: Shri Ram Navami
+      2026-03-31: Shri Mahavir Jayanti
+      2026-04-03: Good Friday
+      2026-04-14: Dr. Baba Saheb Ambedkar Jayanti
+      2026-05-01: Maharashtra Day
+      2026-05-28: Bakri Id
+      2026-06-26: Muharram
+      2026-09-14: Ganesh Chaturthi
+      2026-10-02: Mahatma Gandhi Jayanti
+      2026-10-20: Dussehra
+      2026-11-10: Diwali Balipratipada
+      2026-11-24: Prakash Gurpurb Sri Guru Nanak Dev
+      2026-12-25: Christmas
+    extra_sessions:
+      2026-02-01: Union Budget (Sunday, full session)
+    special_sessions:
+      2026-11-08: Muhurat trading (Sunday)

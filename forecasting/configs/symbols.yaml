@@ -1,0 +1,13 @@
+# ~10 liquid NSE large caps (Kite tradingsymbols). Must match the symbol
+# directory names in the candle export.
+symbols:
+  - RELIANCE
+  - HDFCBANK
+  - ICICIBANK
+  - INFY
+  - TCS
+  - BHARTIARTL
+  - SBIN
+  - ITC
+  - LT
+  - KOTAKBANK

@@ -1,0 +1,20 @@
+# Where the live project's candle export lives and how to read it (read-only).
+# A relative `root` is resolved from the directory you run the command in.
+# Override on the command line with --data-root.
+root: data/export
+start: null          # e.g. 2025-01-01 (inclusive, IST date); null = everything
+end: null
+
+schema:
+  date_format: "%Y-%m-%d"        # format of the date directory (symbol=X/date=<this>/)
+  columns:                       # export column -> canonical name
+    timestamp: timestamp         # Kite's historical API calls this `date`
+    open: open
+    high: high
+    low: low
+    close: close
+    volume: volume
+  timestamp_timezone: Asia/Kolkata   # applied only if timestamps are tz-naive
+  timestamp_unit: ms                 # applied only if timestamps are integer epochs (UTC)
+  timestamp_label: start             # does a candle's stamp mark its start or its end?
+  source_interval_minutes: 1         # candle length in the export

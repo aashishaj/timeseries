@@ -1,0 +1,38 @@
+name: rv_baselines
+description: >-
+  Realized volatility of 5-minute returns, next 30 minutes and next session.
+  Ladder rung 1: baselines only.
+
+symbols: symbols.yaml          # paths relative to this file
+calendar: nse_calendar.yaml
+data: data.yaml
+bar_minutes: 5
+
+horizons:
+  - name: 30min
+    bars: 6                    # 6 x 5-min bars
+    origin: intraday           # a forecast at every bar close with 30 min left in the session
+    stride: 1
+  - name: next_session
+    bars: session              # all 75 bars of the next session
+    origin: session_open       # forecast made before the open (after the previous close)
+
+walk_forward:
+  initial_train_sessions: 60   # ~3 months before the first forecast
+  test_block_sessions: 5       # refit weekly
+  window: expanding            # or: rolling (+ rolling_train_sessions)
+
+baseline: naive
+models:
+  - name: naive
+    type: random_walk
+  - name: hist_mean
+    type: historical_mean
+  - name: seasonal_naive
+    type: seasonal_naive
+    params: {n_sessions: 1}
+  - name: seasonal_mean_5d
+    type: seasonal_naive
+    params: {n_sessions: 5}
+
+output_dir: results/rv_baselines
