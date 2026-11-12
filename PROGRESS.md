@@ -8,12 +8,6 @@ Find forecasting models that beat the naive baseline **and** the previous ladder
 out of sample, then confirm the final set once on the lockbox. "Positive result" means
 a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 
-## Blockers / needs from the owner
-
-- **Real data.** There is no candle export yet. Plan: backfill 1-minute candles with the
-  owner's paid Kite Connect historical API on their Mac, then `run-all` (see
-  REAL_DATA.md). Credentials stay on the Mac.
-
 ## Ladder status
 
 - [x] Rung 1: naive, historical mean, seasonal naive (1d), seasonal mean (5d)
@@ -25,9 +19,37 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 - [x] Ensembles (equal and QLIKE-optimized geometric combinations): no significant gain
 - [x] Simulated paper trading with NSE costs (vol targeting)
 - [x] Real-data tooling: `kite-login`, `backfill-kite`, `run-all`, REAL_DATA.md
-- [ ] Rung 4: deep / foundation models (CPU only; Chronos weights need network access)
+- [~] Rung 4: N-BEATS built and tested; does not beat rung 3 on synthetic dev.
+      Chronos (zero-shot) built; not yet benchmarked (needs network to fetch weights).
+      Real-data results pending.
+
+## Blockers / needs from the owner
+
+- **Real data.** Run `uv run forecasting kite-login --remember-secret` in Terminal,
+  then `uv run forecasting backfill-kite --out data/kite` and
+  `uv run forecasting run-all --data-root data/kite`.
+  Setup: `uv sync --extra kite --extra deep`.
 
 ## Log
+
+### 2026-11-12, round 5
+- Rung 4: N-BEATS (4 blocks, width 64, lookback 30d, QLIKE loss, pooled across symbols).
+  Runs torch in a persistent subprocess (spawn) to avoid macOS OpenMP conflict with lgbm.
+  Synthetic dev results (QLIKE vs naive; vs best of rung 3, DM p):
+  - 30min: nbeats 0.506 (1.23 x lgbm 0.412, p=2e-137): rung 4 does NOT pass.
+  - next_session: nbeats 1.036 (1.61 x arma 0.644, p=2e-21): worse than naive.
+  - Default params under-fit on synthetic: 30d lookback may be too short, 100 epochs
+    too few, or the architecture not expressive enough for intraday patterns.
+  - Chronos (zero-shot amazon/chronos-t5-tiny) registered but not benchmarked yet;
+    needs network access to download ~32 MB weights on first run.
+- Fixed macOS libomp conflict: lgbm and torch cannot share OpenMP in one process.
+  Solution: torch subprocess pool (ProcessPoolExecutor, spawn context); lgbm runs
+  in the main process, torch runs in a fresh child process for every fold.
+  brew install libomp done; KMP_DUPLICATE_LIB_OK=TRUE also set as belt-and-suspenders.
+- Real-data run still pending (kite-login requires owner at the terminal).
+  When ready: `uv sync --extra kite --extra deep` then the three run-all commands.
+- Next: run on real data; tune nbeats (longer lookback, more epochs) if real data
+  shows promise, or move to Chronos / PatchTST.
 
 ### 2026-11-11, round 4
 - Combinations (members: lgbm, garch, arma_logrv_mix, har_mix), synthetic dev:

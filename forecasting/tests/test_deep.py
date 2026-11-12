@@ -43,7 +43,7 @@ def test_nbeats_fit_predict_shape(panel):
         min_train_windows=5,
     )
     model.fit(panel.iloc[: 30 * B * 2])
-    assert model.net_ is not None
+    assert model.state_dict_ is not None
 
     fc = model.predict(panel.iloc[: 35 * B * 2], B)
     assert set(fc.columns) == {"symbol", "yhat"}
@@ -74,7 +74,7 @@ def test_nbeats_too_little_data_returns_nan(panel):
 
     model = NBEATSRVModel(lookback_days=5, n_epochs=1, min_train_windows=100_000)
     model.fit(panel.iloc[: 10 * B * 2])
-    assert model.net_ is None
+    assert model.state_dict_ is None
     fc = model.predict(panel.iloc[: 12 * B * 2], B)
     assert fc["yhat"].isna().all()
 

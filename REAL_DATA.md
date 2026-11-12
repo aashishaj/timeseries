@@ -9,7 +9,7 @@ the Mac: never in this repo, never in chat, never in the cloud.
 curl -LsSf https://astral.sh/uv/install.sh | sh        # Python tool manager
 git clone https://github.com/aashishaj/timeseries && cd timeseries
 git checkout claude/nse-volatility-forecasting-w1h02e
-uv sync --extra kite                                    # installs everything
+uv sync --extra kite --extra deep                       # installs everything (torch for rung 4)
 ```
 
 If LightGBM later complains about `libomp`: `brew install libomp`.

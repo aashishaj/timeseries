@@ -10,17 +10,22 @@ Dependencies (optional — install before using these models):
     uv pip install torch chronos-forecasting        # Chronos
 
 The models import torch lazily; the rest of the package works without it.
+
+macOS OpenMP note
+-----------------
+LightGBM and PyTorch both bundle an OpenMP runtime. Loading both in the same
+process causes a hang (even with KMP_DUPLICATE_LIB_OK=TRUE). The fix is to run
+all torch operations in a dedicated subprocess spawned before lgbm is imported.
+_get_torch_pool() returns a persistent ProcessPoolExecutor(spawn) for this.
+_nbeats_train_job and _nbeats_predict_job are module-level so they are
+picklable with the 'spawn' start method.
 """
 
 from __future__ import annotations
 
 import os
-
-# LightGBM and PyTorch both bundle an OpenMP runtime. On macOS this causes a
-# crash when both are loaded in the same process. Setting this env var before
-# torch is imported suppresses the duplicate-library check.
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
-
+import concurrent.futures as cf
+import multiprocessing as mp
 from typing import Self
 
 import numpy as np
@@ -32,111 +37,166 @@ from forecasting.data.panel import n_symbols, panel_symbols
 
 
 # ---------------------------------------------------------------------------
-# helpers
+# Subprocess pool: torch runs here, isolated from lgbm's OpenMP runtime.
 # ---------------------------------------------------------------------------
 
-def _require_torch():
-    try:
-        import torch
-        return torch
-    except ImportError as exc:
-        raise ImportError(
-            "PyTorch is required for deep models.\n"
-            "Install with:  uv pip install torch"
-        ) from exc
+_TORCH_POOL: cf.ProcessPoolExecutor | None = None
 
 
-def _qlike_log_loss(log_mu: "torch.Tensor", log_y: "torch.Tensor") -> "torch.Tensor":
-    """QLIKE in log space: E[exp(log_y - log_mu) - (log_y - log_mu) - 1].
-
-    Equivalent to y/mu - log(y/mu) - 1 when mu = exp(log_mu), y = exp(log_y).
-    Gradient w.r.t. log_mu is (-y/mu + 1), which pushes mu toward y.
-    """
-    d = log_y - log_mu
-    return (d.exp() - d - 1.0).mean()
+def _get_torch_pool() -> cf.ProcessPoolExecutor:
+    global _TORCH_POOL
+    if _TORCH_POOL is None:
+        ctx = mp.get_context("spawn")
+        _TORCH_POOL = cf.ProcessPoolExecutor(max_workers=1, mp_context=ctx)
+    return _TORCH_POOL
 
 
 # ---------------------------------------------------------------------------
-# N-BEATS
+# Module-level worker functions (must be top-level to be picklable with spawn)
 # ---------------------------------------------------------------------------
 
-class _NBEATSNet:
-    """Thin wrapper around a PyTorch N-BEATS network (no nn.Module dependency at import)."""
+def _nbeats_train_job(
+    x: np.ndarray,
+    y: np.ndarray,
+    lookback: int,
+    n_blocks: int,
+    width: int,
+    n_epochs: int,
+    lr: float,
+    batch_size: int,
+    seed: int,
+) -> dict[str, np.ndarray]:
+    """Train N-BEATS in the subprocess; returns state dict as numpy arrays."""
+    import os as _os
+    _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    import torch
+    import torch.nn as nn
+    import numpy as _np
 
-    def __init__(self, lookback: int, n_blocks: int, width: int) -> None:
-        torch = _require_torch()
-        import torch.nn as nn
+    class _Block(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc = nn.Sequential(
+                nn.Linear(lookback, width), nn.ReLU(),
+                nn.Linear(width, width), nn.ReLU(),
+            )
+            self.bc = nn.Linear(width, lookback)
+            self.fo = nn.Linear(width, 1)
 
-        class Block(nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.fc = nn.Sequential(
-                    nn.Linear(lookback, width), nn.ReLU(),
-                    nn.Linear(width, width), nn.ReLU(),
-                )
-                self.backcast = nn.Linear(width, lookback)
-                self.forecast = nn.Linear(width, 1)
+        def forward(self, z):
+            h = self.fc(z)
+            return self.bc(h), self.fo(h)
 
-            def forward(self, x):
-                h = self.fc(x)
-                return self.backcast(h), self.forecast(h)
+    class _Net(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.blocks = nn.ModuleList([_Block() for _ in range(n_blocks)])
 
-        class NBEATS(nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.blocks = nn.ModuleList([Block() for _ in range(n_blocks)])
+        def forward(self, z):
+            fc = torch.zeros(z.shape[0], 1)
+            r = z
+            for blk in self.blocks:
+                bc, f = blk(r)
+                r = r - bc
+                fc = fc + f
+            return fc.squeeze(-1)
 
-            def forward(self, x):
-                fc_total = torch.zeros(x.shape[0], 1, device=x.device)
-                residual = x
-                for blk in self.blocks:
-                    bc, fc = blk(residual)
-                    residual = residual - bc
-                    fc_total = fc_total + fc
-                return fc_total.squeeze(-1)
+    torch.manual_seed(seed)
+    net = _Net()
+    net.train()
+    opt = torch.optim.Adam(net.parameters(), lr=lr)
+    xt = torch.tensor(x, dtype=torch.float32)
+    yt = torch.tensor(y, dtype=torch.float32)
+    n = len(xt)
+    rng = _np.random.default_rng(seed)
+    for _ in range(n_epochs):
+        idx = rng.permutation(n)
+        for start in range(0, n, batch_size):
+            b = torch.tensor(idx[start : start + batch_size])
+            opt.zero_grad()
+            d = yt[b] - net(xt[b])  # log_y - log_mu
+            (d.exp() - d - 1.0).mean().backward()  # QLIKE in log space
+            opt.step()
+    return {k: v.detach().cpu().numpy() for k, v in net.state_dict().items()}
 
-        self.net = NBEATS()
-        self._torch = torch
 
-    def train(
-        self,
-        x: np.ndarray,
-        y: np.ndarray,
-        n_epochs: int,
-        lr: float,
-        batch_size: int,
-        seed: int,
-    ) -> None:
-        torch = self._torch
-        torch.manual_seed(seed)
-        self.net.train()
-        opt = torch.optim.Adam(self.net.parameters(), lr=lr)
-        xt = torch.tensor(x, dtype=torch.float32)
-        yt = torch.tensor(y, dtype=torch.float32)
-        n = len(xt)
-        rng = np.random.default_rng(seed)
-        for _ in range(n_epochs):
-            idx = rng.permutation(n)
-            for start in range(0, n, batch_size):
-                b = torch.tensor(idx[start : start + batch_size])
-                opt.zero_grad()
-                loss = _qlike_log_loss(self.net(xt[b]), yt[b])
-                loss.backward()
-                opt.step()
+def _nbeats_predict_job(
+    x: np.ndarray,
+    state_numpy: dict[str, np.ndarray],
+    lookback: int,
+    n_blocks: int,
+    width: int,
+) -> np.ndarray:
+    """Run N-BEATS inference in the subprocess; returns predictions as numpy."""
+    import os as _os
+    _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    import torch
+    import torch.nn as nn
 
-    def predict(self, x: np.ndarray) -> np.ndarray:
-        torch = self._torch
-        self.net.eval()
-        with torch.no_grad():
-            return self.net(torch.tensor(x, dtype=torch.float32)).numpy()
+    class _Block(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc = nn.Sequential(
+                nn.Linear(lookback, width), nn.ReLU(),
+                nn.Linear(width, width), nn.ReLU(),
+            )
+            self.bc = nn.Linear(width, lookback)
+            self.fo = nn.Linear(width, 1)
 
+        def forward(self, z):
+            h = self.fc(z)
+            return self.bc(h), self.fo(h)
+
+    class _Net(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.blocks = nn.ModuleList([_Block() for _ in range(n_blocks)])
+
+        def forward(self, z):
+            fc = torch.zeros(z.shape[0], 1)
+            r = z
+            for blk in self.blocks:
+                bc, f = blk(r)
+                r = r - bc
+                fc = fc + f
+            return fc.squeeze(-1)
+
+    net = _Net()
+    net.load_state_dict({k: torch.tensor(v) for k, v in state_numpy.items()})
+    net.eval()
+    with torch.no_grad():
+        return net(torch.tensor(x, dtype=torch.float32)).cpu().numpy()
+
+
+def _chronos_predict_job(
+    contexts: list[np.ndarray],
+    model_id: str,
+    num_samples: int,
+) -> np.ndarray:
+    """Run Chronos inference in the subprocess; returns medians as numpy."""
+    import os as _os
+    _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    import torch
+    from chronos import BaseChronosPipeline
+
+    pipeline = BaseChronosPipeline.from_pretrained(
+        model_id, device_map="cpu", torch_dtype=torch.float32
+    )
+    tensors = [torch.tensor(c, dtype=torch.float32) for c in contexts]
+    samples = pipeline.predict(tensors, prediction_length=1, num_samples=num_samples)
+    return samples[:, :, 0].median(dim=1).values.numpy()
+
+
+# ---------------------------------------------------------------------------
+# N-BEATS model
+# ---------------------------------------------------------------------------
 
 class NBEATSRVModel(DailyComponentModel):
     """N-BEATS (Oreshkin et al. 2020) on log daily RV, pooled across symbols.
 
     Uses a generic (non-interpretable) stack with QLIKE loss in log space.
-    The forecast is in log-RV space; the parent class converts it to variance
-    and applies the time-of-day profile + optional intraday correction.
+    Training and inference run in a dedicated subprocess to avoid an OpenMP
+    conflict with LightGBM on macOS (see module docstring).
     """
 
     def __init__(
@@ -166,11 +226,9 @@ class NBEATSRVModel(DailyComponentModel):
         self.history_days = lookback_days
 
     def _fit_daily(self, rv: np.ndarray) -> None:
-        """Train on sliding windows of log daily RV, pooled across symbols."""
         d, s = rv.shape
         log_rv = np.log(np.where(rv > 0, rv, np.nan))
 
-        # Build (lookback → target) pairs; skip windows with any NaN.
         windows_x, windows_y = [], []
         for j in range(s):
             seq = log_rv[:, j]
@@ -178,23 +236,29 @@ class NBEATSRVModel(DailyComponentModel):
                 x_win = seq[t - self.lookback_days : t]
                 y_val = seq[t]
                 if np.isfinite(x_win).all() and np.isfinite(y_val):
-                    # Normalize by window mean so the network sees de-meaned series.
                     mu = x_win.mean()
                     windows_x.append(x_win - mu)
                     windows_y.append(y_val - mu)
 
         if len(windows_x) < self.min_train_windows:
-            self.net_ = None
+            self.state_dict_: dict[str, np.ndarray] | None = None
             return
 
         x_arr = np.array(windows_x, dtype=np.float32)
         y_arr = np.array(windows_y, dtype=np.float32)
-        self.net_ = _NBEATSNet(self.lookback_days, self.n_blocks, self.width)
-        self.net_.train(x_arr, y_arr, self.n_epochs, self.lr, self.batch_size, self.seed)
+        try:
+            self.state_dict_ = _get_torch_pool().submit(
+                _nbeats_train_job,
+                x_arr, y_arr,
+                self.lookback_days, self.n_blocks, self.width,
+                self.n_epochs, self.lr, self.batch_size, self.seed,
+            ).result()
+        except Exception:
+            self.state_dict_ = None
 
     def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
         s = rv.shape[1]
-        if self.net_ is None:
+        if self.state_dict_ is None:
             return np.full(s, np.nan)
         log_rv = np.log(np.where(rv > 0, rv, np.nan))
         out = np.full(s, np.nan)
@@ -204,11 +268,17 @@ class NBEATSRVModel(DailyComponentModel):
             if len(finite) < max(5, self.lookback_days // 3):
                 continue
             mu = finite.mean()
-            # Mean-impute NaN positions; network was trained on clean windows.
             seq_filled = np.where(np.isfinite(seq), seq, mu)
             x_norm = (seq_filled - mu).reshape(1, -1).astype(np.float32)
-            log_fc = float(self.net_.predict(x_norm)[0]) + mu
-            out[j] = np.exp(log_fc)
+            try:
+                log_fc = float(_get_torch_pool().submit(
+                    _nbeats_predict_job,
+                    x_norm, self.state_dict_,
+                    self.lookback_days, self.n_blocks, self.width,
+                ).result()[0]) + mu
+                out[j] = np.exp(log_fc)
+            except Exception:
+                pass
         return out
 
 
@@ -220,8 +290,8 @@ class ChronosRVModel(DailyComponentModel):
     """Zero-shot Chronos-T5 on log daily RV.
 
     Downloads model weights on first ``fit`` call (cached by HuggingFace hub).
-    No training: ``_fit_daily`` only stores the model variant and sets up the
-    pipeline. ``_forecast_daily`` runs inference on each symbol independently.
+    No training: ``_fit_daily`` is a no-op. Inference runs in the same torch
+    subprocess as N-BEATS to avoid the macOS OpenMP conflict.
 
     Requires:  uv pip install torch chronos-forecasting
     """
@@ -243,60 +313,36 @@ class ChronosRVModel(DailyComponentModel):
         self.history_days = context_days
 
     def fit(self, train_df: pd.DataFrame) -> Self:
-        """Load the Chronos pipeline and store the seasonal profile."""
-        try:
-            from chronos import BaseChronosPipeline
-        except ImportError as exc:
-            raise ImportError(
-                "chronos-forecasting is required for ChronosRVModel.\n"
-                "Install with:  uv pip install torch chronos-forecasting"
-            ) from exc
-
-        torch = _require_torch()
         self.profile_ = seasonal_profile(train_df, self.pooled_seasonality)
         self.symbols_ = panel_symbols(train_df)
-        self.pipeline_ = BaseChronosPipeline.from_pretrained(
-            self.model_id,
-            device_map="cpu",
-            torch_dtype=torch.float32,
-        )
         rv, _ = daily_rv(train_df, self.profile_, self.min_coverage)
         self._fit_daily(rv)
         self.cache_ = None
         return self
 
     def _fit_daily(self, rv: np.ndarray) -> None:
-        pass  # Chronos is zero-shot; nothing to fit
+        pass  # zero-shot: nothing to train
 
     def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
-        torch = _require_torch()
         s = rv.shape[1]
         log_rv = np.log(np.where(rv > 0, rv, np.nan))
-        contexts = []
-        valid = []
+        contexts, valid_idx = [], []
         for j in range(s):
             seq = log_rv[-self.context_days :, j]
             finite = seq[np.isfinite(seq)]
-            if len(finite) < 5:
-                valid.append(False)
-                contexts.append(torch.zeros(1))
-            else:
-                valid.append(True)
-                contexts.append(torch.tensor(finite, dtype=torch.float32))
+            if len(finite) >= 5:
+                valid_idx.append(j)
+                contexts.append(finite)
 
         out = np.full(s, np.nan)
-        active = [c for c, v in zip(contexts, valid) if v]
-        active_idx = [j for j, v in enumerate(valid) if v]
-        if not active:
+        if not contexts:
             return out
-
-        # chronos.predict returns (n_series, num_samples, prediction_length)
-        samples = self.pipeline_.predict(
-            context=active,
-            prediction_length=1,
-            num_samples=self.num_samples,
-        )
-        medians = samples[:, :, 0].median(dim=1).values.numpy()
-        for k, j in enumerate(active_idx):
-            out[j] = float(np.exp(medians[k]))
+        try:
+            medians = _get_torch_pool().submit(
+                _chronos_predict_job, contexts, self.model_id, self.num_samples
+            ).result()
+            for k, j in enumerate(valid_idx):
+                out[j] = float(np.exp(medians[k]))
+        except Exception:
+            pass
         return out
