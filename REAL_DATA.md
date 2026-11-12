@@ -16,18 +16,23 @@ If LightGBM later complains about `libomp`: `brew install libomp`.
 
 ## Each day you use Kite: log in (you, in Terminal)
 
-Kite access tokens expire every morning. Type these yourself; do not paste the
-secret anywhere else:
+Kite access tokens expire every morning. Run this yourself in Terminal on the Mac;
+never paste the API secret into chat or a file in the repo:
 
 ```bash
-export KITE_API_KEY=your_api_key
-export KITE_API_SECRET=your_api_secret
 uv run forecasting kite-login
 ```
 
-It prints a Zerodha login URL. Log in, copy the URL you are redirected to, and
-paste it back. The token is saved to `~/.config/nse-forecasting/` (readable only
-by you) and is never printed.
+1. It asks for your API key, then your API secret (typing is hidden, and nothing
+   lands in shell history).
+2. Your browser opens the Zerodha login. Log in as usual.
+3. Zerodha redirects to your app's redirect URL (`http://127.0.0.1:8766/callback`);
+   `kite-login` is listening there, catches the login, and says it is done. If that
+   port is busy (say your live pipeline uses it), it asks you to paste the URL from
+   the browser's address bar instead.
+
+The access token and API key are saved to `~/.config/nse-forecasting/` (readable
+only by you) and never printed. The secret is used once and not stored.
 
 ## Get data and run everything
 

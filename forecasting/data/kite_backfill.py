@@ -95,21 +95,86 @@ def make_client(token_file: Path | None = None):
     return kite
 
 
-def interactive_login(token_file: Path | None = None, ask: Callable[[str], str] = input) -> Path:
-    """Browser login -> request token -> access token, saved privately. Never printed."""
+def wait_for_request_token(
+    port: int = 8766, timeout: float = 300.0, host: str = "127.0.0.1"
+) -> str | None:
+    """Answer the browser's redirect to ``http://host:port/...`` and return its
+    ``request_token`` (None on timeout). The URL is never logged: it holds the token."""
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    result: dict[str, str] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 (http.server naming)
+            token = parse_qs(urlparse(self.path).query).get("request_token", [None])[0]
+            if token:
+                result["token"] = token
+            body = b"Kite login received. You can close this tab." if token else b"Waiting..."
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args) -> None:  # keep the token out of the terminal
+            return
+
+    server = HTTPServer((host, port), Handler)
+    server.timeout = 1.0
+    deadline = time.monotonic() + timeout
+    try:
+        while "token" not in result and time.monotonic() < deadline:
+            server.handle_request()
+    finally:
+        server.server_close()
+    return result.get("token")
+
+
+def interactive_login(
+    token_file: Path | None = None,
+    *,
+    port: int = 8766,
+    open_browser: bool = True,
+    ask: Callable[[str], str] = input,
+    ask_secret: Callable[[str], str] | None = None,
+) -> Path:
+    """Browser login -> request token -> access token, saved privately.
+
+    The API key and secret come from the environment or hidden prompts (so they never
+    land in shell history); the secret is used once and not stored. The request token
+    is caught by a one-shot local server on the app's redirect port (127.0.0.1:<port>),
+    falling back to pasting the redirect URL if that port is busy.
+    """
+    import getpass
+
     from kiteconnect import KiteConnect
 
-    api_key, secret = os.environ.get("KITE_API_KEY"), os.environ.get("KITE_API_SECRET")
-    if not api_key or not secret:
-        raise RuntimeError("set KITE_API_KEY and KITE_API_SECRET in your environment")
+    ask_secret = ask_secret or getpass.getpass
+    api_key = os.environ.get("KITE_API_KEY") or (
+        API_KEY_FILE.read_text().strip() if API_KEY_FILE.exists() else ""
+    )
+    api_key = api_key or ask("Kite API key: ").strip()
+    secret = os.environ.get("KITE_API_SECRET") or ask_secret("Kite API secret (hidden): ")
     kite = KiteConnect(api_key=api_key)
-    print("1. Open this URL and log in to Zerodha:\n   " + kite.login_url())
-    print("2. After login you are redirected; copy the full redirect URL.")
-    answer = ask("Paste the redirect URL (or just the request_token): ").strip()
-    request_token = answer
-    if "request_token=" in answer:
-        request_token = answer.split("request_token=", 1)[1].split("&", 1)[0]
-    session = kite.generate_session(request_token, api_secret=secret)
+    url = kite.login_url()
+    print("Log in to Zerodha in your browser:\n  " + url)
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(url)
+    try:
+        print(f"Waiting for the redirect to 127.0.0.1:{port} (up to 5 minutes)...")
+        request_token = wait_for_request_token(port)
+    except OSError:  # port in use (e.g. the live pipeline listens there)
+        request_token = None
+        print(f"Port {port} is busy; falling back to copy-paste.")
+    if not request_token:
+        answer = ask("Paste the full URL you were redirected to: ").strip()
+        request_token = answer
+        if "request_token=" in answer:
+            request_token = answer.split("request_token=", 1)[1].split("&", 1)[0]
+    session = kite.generate_session(request_token, api_secret=secret.strip())
     save_access_token(api_key, API_KEY_FILE)  # same private permissions; not the secret
     return save_access_token(session["access_token"], token_file)
 

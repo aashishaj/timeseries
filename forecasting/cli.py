@@ -290,7 +290,11 @@ def _run_report(name: str, root: Path, metrics, accuracy, out: Path) -> str:
 def cmd_kite_login(args: argparse.Namespace) -> int:
     from forecasting.data.kite_backfill import interactive_login
 
-    path = interactive_login(Path(args.token_file) if args.token_file else None)
+    path = interactive_login(
+        Path(args.token_file) if args.token_file else None,
+        port=args.port,
+        open_browser=not args.no_browser,
+    )
     print(f"Access token saved to {path} (readable only by you). It expires daily.")
     return 0
 
@@ -379,6 +383,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("kite-login", help="log in to Kite and save today's access token privately")
     p.add_argument("--token-file", default=None)
+    p.add_argument("--port", type=int, default=8766, help="port of your app's redirect URL")
+    p.add_argument("--no-browser", action="store_true", help="only print the login URL")
     p.set_defaults(func=cmd_kite_login)
 
     p = sub.add_parser("backfill-kite", help="download 1-min candles via the Kite historical API")
