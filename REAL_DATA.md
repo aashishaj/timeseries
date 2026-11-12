@@ -54,8 +54,36 @@ git add results/run_kite results/leaderboard.*
 git commit -m "Real-data results" && git push
 ```
 
-## Keep the Mac awake while it runs
+## Keep the Mac working with the lid closed
 
-Plugged in, lid open, and either System Settings > Battery > Options > "Prevent
-automatic sleeping on power adapter when the display is off", or run
-`caffeinate -i` in a spare Terminal window.
+A MacBook normally sleeps when the lid closes, and `caffeinate` does not stop that.
+To keep jobs (and a Remote Control session) running with the lid shut:
+
+```bash
+sudo pmset -a disablesleep 1      # no sleep at all, lid closed included
+pmset -g | grep -i sleep          # check: SleepDisabled 1
+```
+
+Turn it back off when you are done, or before putting the Mac in a bag:
+
+```bash
+sudo pmset -a disablesleep 0
+```
+
+While it is on: keep the Mac plugged in, on a hard surface (it cannot cool well
+under a pillow or in a bag), and leave the Claude app or Terminal session running.
+Wi-Fi stays connected. A GUI alternative is the free Amphetamine app, which has a
+closed-lid option. Clamshell mode (external display + power) also works without
+changing settings.
+
+## Drive it from your phone
+
+Run Claude on the Mac in the repo folder: either the Claude desktop app with the
+folder shared under Settings > Claude Code > Remote Control, or `claude
+remote-control` in a Terminal inside the folder. The session then appears in the
+Claude app on your phone. Good first message for that session:
+
+> Read README.md, PROGRESS.md and REAL_DATA.md. Set up the project per REAL_DATA.md
+> (uv, `uv sync --extra kite`). Do not ask me for Kite secrets: I run
+> `forecasting kite-login` myself. Then run backfill-kite and run-all, and commit
+> and push the results folder.
