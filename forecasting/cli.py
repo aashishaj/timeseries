@@ -294,6 +294,7 @@ def cmd_kite_login(args: argparse.Namespace) -> int:
         Path(args.token_file) if args.token_file else None,
         port=args.port,
         open_browser=not args.no_browser,
+        remember_secret=args.remember_secret,
     )
     print(f"Access token saved to {path} (readable only by you). It expires daily.")
     return 0
@@ -385,6 +386,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--token-file", default=None)
     p.add_argument("--port", type=int, default=8766, help="port of your app's redirect URL")
     p.add_argument("--no-browser", action="store_true", help="only print the login URL")
+    p.add_argument(
+        "--remember-secret",
+        action="store_true",
+        help="store the API secret in ~/.config/nse-forecasting (0600) so it is asked only once",
+    )
     p.set_defaults(func=cmd_kite_login)
 
     p = sub.add_parser("backfill-kite", help="download 1-min candles via the Kite historical API")

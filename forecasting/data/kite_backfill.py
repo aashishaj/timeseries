@@ -39,6 +39,7 @@ MARKER = "_KITE_BACKFILL"
 CONFIG_DIR = Path.home() / ".config" / "nse-forecasting"
 DEFAULT_TOKEN_FILE = CONFIG_DIR / "kite_access_token"
 API_KEY_FILE = CONFIG_DIR / "kite_api_key"
+API_SECRET_FILE = CONFIG_DIR / "kite_api_secret"  # only with --remember-secret
 MAX_DAYS_PER_REQUEST = 55  # Kite allows 60 for minute candles; stay under it
 
 
@@ -136,13 +137,15 @@ def interactive_login(
     *,
     port: int = 8766,
     open_browser: bool = True,
+    remember_secret: bool = False,
     ask: Callable[[str], str] = input,
     ask_secret: Callable[[str], str] | None = None,
 ) -> Path:
     """Browser login -> request token -> access token, saved privately.
 
-    The API key and secret come from the environment or hidden prompts (so they never
-    land in shell history); the secret is used once and not stored. The request token
+    The API key and secret come from the environment, the private config folder, or
+    hidden prompts (so they never land in shell history). The secret is stored (0600,
+    outside the repo) only with ``remember_secret=True``. The request token
     is caught by a one-shot local server on the app's redirect port (127.0.0.1:<port>),
     falling back to pasting the redirect URL if that port is busy.
     """
@@ -155,7 +158,12 @@ def interactive_login(
         API_KEY_FILE.read_text().strip() if API_KEY_FILE.exists() else ""
     )
     api_key = api_key or ask("Kite API key: ").strip()
-    secret = os.environ.get("KITE_API_SECRET") or ask_secret("Kite API secret (hidden): ")
+    secret = os.environ.get("KITE_API_SECRET") or (
+        API_SECRET_FILE.read_text().strip() if API_SECRET_FILE.exists() else ""
+    )
+    secret = secret or ask_secret("Kite API secret (hidden): ")
+    if remember_secret:
+        save_access_token(secret.strip(), API_SECRET_FILE)  # 0600, outside the repo
     kite = KiteConnect(api_key=api_key)
     url = kite.login_url()
     print("Log in to Zerodha in your browser:\n  " + url)

@@ -32,7 +32,10 @@ uv run forecasting kite-login
    the browser's address bar instead.
 
 The access token and API key are saved to `~/.config/nse-forecasting/` (readable
-only by you) and never printed. The secret is used once and not stored.
+only by you) and never printed. The secret is used once and not stored, unless you
+run `uv run forecasting kite-login --remember-secret`: then it is kept in the same
+private folder and you are not asked again. Nothing from that folder is ever
+committed: it lives outside the repo.
 
 ## Get data and run everything
 

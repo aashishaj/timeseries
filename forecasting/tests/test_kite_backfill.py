@@ -179,6 +179,7 @@ def test_login_saves_token_privately_and_never_prints_secrets(tmp_path, monkeypa
         sys.modules, "kiteconnect", types.SimpleNamespace(KiteConnect=FakeKiteConnect)
     )
     monkeypatch.setattr(kb, "API_KEY_FILE", tmp_path / "kite_api_key")
+    monkeypatch.setattr(kb, "API_SECRET_FILE", tmp_path / "kite_api_secret")
     monkeypatch.setattr(kb, "wait_for_request_token", lambda port: "REQ")
     monkeypatch.delenv("KITE_API_KEY", raising=False)
     monkeypatch.delenv("KITE_API_SECRET", raising=False)
@@ -194,3 +195,46 @@ def test_login_saves_token_privately_and_never_prints_secrets(tmp_path, monkeypa
     assert (tmp_path / "kite_api_key").read_text() == "KEY"
     printed = capsys.readouterr().out
     assert "SUPER-SECRET" not in printed and "ACCESS-TOKEN-VALUE" not in printed
+
+
+def test_remember_secret_asks_only_once(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    import forecasting.data.kite_backfill as kb
+
+    class FakeKiteConnect:
+        def __init__(self, api_key):
+            pass
+
+        def login_url(self):
+            return "https://kite.example/login"
+
+        def generate_session(self, request_token, api_secret):
+            assert api_secret == "SUPER-SECRET"
+            return {"access_token": "TOK"}
+
+    monkeypatch.setitem(
+        sys.modules, "kiteconnect", types.SimpleNamespace(KiteConnect=FakeKiteConnect)
+    )
+    monkeypatch.setattr(kb, "API_KEY_FILE", tmp_path / "kite_api_key")
+    monkeypatch.setattr(kb, "API_SECRET_FILE", tmp_path / "kite_api_secret")
+    monkeypatch.setattr(kb, "wait_for_request_token", lambda port: "REQ")
+    monkeypatch.delenv("KITE_API_KEY", raising=False)
+    monkeypatch.delenv("KITE_API_SECRET", raising=False)
+    asked = []
+
+    def secret_prompt(prompt):
+        asked.append(prompt)
+        return "SUPER-SECRET"
+
+    for _ in range(2):
+        kb.interactive_login(
+            tmp_path / "tok",
+            open_browser=False,
+            remember_secret=True,
+            ask=lambda p: "KEY",
+            ask_secret=secret_prompt,
+        )
+    assert len(asked) == 1  # second login reused the stored secret
+    assert stat.S_IMODE((tmp_path / "kite_api_secret").stat().st_mode) == 0o600
