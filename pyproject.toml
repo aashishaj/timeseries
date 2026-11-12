@@ -16,6 +16,10 @@ dependencies = [
 [project.optional-dependencies]
 # Only on your own machine, for `forecasting kite-login` / `backfill-kite`.
 kite = ["kiteconnect>=5"]
+# Rung 4 deep models (CPU-only; GPU works too if you have one).
+deep = ["torch>=2.1"]
+# Rung 4 Chronos zero-shot foundation model (also needs torch).
+foundation = ["torch>=2.1", "chronos-forecasting>=1.5"]
 
 [project.scripts]
 forecasting = "forecasting.cli:main"

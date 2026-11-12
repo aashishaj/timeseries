@@ -4,7 +4,7 @@ Latest result per model configuration. `trials` counts every distinct configurat
 ever run on that data/split/horizon (losers included). The more trials, the more
 a top result may be luck, so the lockbox (`split = final`) is the number that counts.
 
-## synthetic / dev / 30min (14 trials)
+## synthetic / dev / 30min (15 trials)
 
 | model | QLIKE / naive | MSE / naive | MASE | DM p | beats naive | spec | run |
 |---|---|---|---|---|---|---|---|
@@ -16,14 +16,15 @@ a top result may be luck, so the lockbox (`split = final`) is the number that co
 | arma_logrv_mix | 0.469 | 0.591 | 0.775 | 0 | 10/10 | `arma_logrv, intraday_beta=0.5, order=[1, 1]` | 2026-11-11 11:07 |
 | har_mix | 0.474 | 0.599 | 0.770 | 0 | 10/10 | `har, intraday_beta=0.5, pooled=True` | 2026-11-11 11:07 |
 | ewma_hl1 | 0.486 | 0.609 | 0.805 | 8.6e-320 | 10/10 | `ewma, halflife_sessions=1.0` | 2026-11-11 10:44 |
+| nbeats | 0.506 | 0.627 | 0.798 | 1.1e-315 | 10/10 | `nbeats, intraday_beta=0.5, lookback_days=30, n_blocks=4, n_epochs=100, width=64` | 2026-11-12 06:25 |
 | ewma_hl5 | 0.534 | 0.667 | 0.829 | 8.4e-244 | 10/10 | `ewma, halflife_sessions=5.0` | 2026-11-11 10:44 |
 | har_pooled | 0.548 | 0.678 | 0.828 | 4.3e-213 | 10/10 | `har, pooled=True` | 2026-11-11 10:44 |
 | har | 0.556 | 0.679 | 0.834 | 1.1e-200 | 10/10 | `har, pooled=False` | 2026-11-11 10:44 |
 | hist_mean | 0.637 | 0.780 | 0.914 | 2.2e-116 | 10/10 | `historical_mean` | 2026-11-11 10:44 |
 | seasonal_mean_5d | 0.661 | 0.763 | 0.912 | 2.5e-110 | 10/10 | `seasonal_naive, n_sessions=5` | 2026-11-11 11:07 |
-| naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-11 11:07 |
+| naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-12 06:25 |
 
-## synthetic / dev / next_session (14 trials)
+## synthetic / dev / next_session (15 trials)
 
 | model | QLIKE / naive | MSE / naive | MASE | DM p | beats naive | spec | run |
 |---|---|---|---|---|---|---|---|
@@ -40,4 +41,5 @@ a top result may be luck, so the lockbox (`split = final`) is the number that co
 | garch | 0.813 | 0.788 | 0.909 | 9.3e-06 | 10/10 | `garch, asymmetric=False` | 2026-11-11 11:07 |
 | gjr_garch | 0.814 | 0.788 | 0.911 | 2.7e-05 | 10/10 | `garch, asymmetric=True` | 2026-11-11 10:44 |
 | hist_mean | 0.970 | 0.955 | 0.978 | 0.84 | 8/10 | `historical_mean` | 2026-11-11 10:44 |
-| naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-11 11:07 |
+| naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-12 06:25 |
+| nbeats | 1.036 | 0.968 | 1.044 | 0.4 | 4/10 | `nbeats, intraday_beta=0.5, lookback_days=30, n_blocks=4, n_epochs=100, width=64` | 2026-11-12 06:25 |

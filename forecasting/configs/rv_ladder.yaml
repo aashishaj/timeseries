@@ -41,7 +41,20 @@ models:
   # rung 3: ML. Anchor (5-session RV x time-of-day share) x boosted correction from
   # realized measures, range estimators, ATR, Bollinger width, RSI, volume, time
   - {name: lgbm, type: lightgbm, rung: 3}
-  # rung 5: our own mixes (rung 4 is reserved for deep / foundation models).
+  # rung 4: deep / foundation models (CPU only; torch required).
+  - name: nbeats
+    type: nbeats
+    rung: 4
+    params: {lookback_days: 30, n_blocks: 4, width: 64, n_epochs: 100, intraday_beta: 0.5}
+  - name: nbeats_deep
+    type: nbeats
+    rung: 4
+    params: {lookback_days: 60, n_blocks: 6, width: 128, n_epochs: 150, intraday_beta: 0.5}
+  - name: chronos_tiny
+    type: chronos
+    rung: 4
+    params: {model_id: "amazon/chronos-t5-tiny", num_samples: 100, intraday_beta: 0.5}
+  # rung 5: our own mixes (now including best of rung 4 as candidates).
   # Geometric combination of the best intraday and best daily models.
   - name: combo_equal
     type: combination
