@@ -1,8 +1,10 @@
 """NSE trading calendar: which dates are sessions, and the intraday bar grid.
 
-Only the regular continuous session (09:15-15:30 IST) is modelled. Pre-open
-(09:00-09:08), the closing session and non-regular special sessions (Muhurat,
-DR drills) are excluded on purpose.
+Only the regular continuous session is modelled (09:15-15:30 IST; 09:15-15:15 from
+3 Aug 2026, when the closing auction session replaced the last 15 minutes of
+continuous trading; see ``close_changes``). Pre-open (09:00-09:08), the closing
+session/auction and non-regular special sessions (Muhurat, DR drills) are excluded
+on purpose.
 """
 
 from __future__ import annotations
@@ -45,6 +47,8 @@ class NSECalendar:
         extra_sessions: weekend dates with a full regular session.
         special_sessions: dates with non-regular sessions that are deliberately not modelled.
         covered_years: years for which the holiday list was provided.
+        close_changes: (effective date, close time) pairs, sorted by date: from each
+            date on, continuous trading ends at that time instead of ``close_time``.
     """
 
     holidays: frozenset[dt.date] = frozenset()
@@ -53,6 +57,7 @@ class NSECalendar:
     covered_years: frozenset[int] = frozenset()
     open_time: dt.time = dt.time(9, 15)
     close_time: dt.time = dt.time(15, 30)
+    close_changes: tuple[tuple[dt.date, dt.time], ...] = ()
     tz: str = IST
     names: dict[dt.date, str] = field(default_factory=dict, compare=False, repr=False)
 
@@ -85,6 +90,9 @@ class NSECalendar:
         if clash:
             raise ValueError(f"dates are both holidays and extra sessions: {sorted(clash)}")
         session = raw.get("regular_session") or {}
+        changes = sorted(
+            (to_date(d), _parse_time(t)) for d, t in (session.get("close_changes") or {}).items()
+        )
         return cls(
             holidays=frozenset(holidays),
             extra_sessions=frozenset(extra),
@@ -92,24 +100,47 @@ class NSECalendar:
             covered_years=frozenset(years),
             open_time=_parse_time(session.get("open", "09:15")),
             close_time=_parse_time(session.get("close", "15:30")),
+            close_changes=tuple(changes),
             tz=raw.get("timezone", IST),
             names=names,
         )
 
     # ------------------------------------------------------------------ sessions
-    @property
-    def session_minutes(self) -> int:
+    def minutes_to(self, close: dt.time) -> int:
+        """Length in minutes of a session from the open to ``close``."""
         start = dt.datetime.combine(dt.date(2000, 1, 1), self.open_time)
-        end = dt.datetime.combine(dt.date(2000, 1, 1), self.close_time)
+        end = dt.datetime.combine(dt.date(2000, 1, 1), close)
         return int((end - start).total_seconds() // 60)
 
-    def bars_per_session(self, bar_minutes: int) -> int:
-        if bar_minutes <= 0 or self.session_minutes % bar_minutes:
+    @property
+    def session_minutes(self) -> int:
+        """Length of the default session (before any ``close_changes``)."""
+        return self.minutes_to(self.close_time)
+
+    def bars_per_session(self, bar_minutes: int, close: dt.time | None = None) -> int:
+        minutes = self.minutes_to(close or self.close_time)
+        if bar_minutes <= 0 or minutes <= 0 or minutes % bar_minutes:
             raise ValueError(
-                f"bar_minutes={bar_minutes} does not divide the "
-                f"{self.session_minutes}-minute session"
+                f"bar_minutes={bar_minutes} does not divide the {minutes}-minute session"
             )
-        return self.session_minutes // bar_minutes
+        return minutes // bar_minutes
+
+    def close_time_on(self, day: dt.date | str | pd.Timestamp) -> dt.time:
+        """When continuous trading ends on ``day``."""
+        d, close = to_date(day), self.close_time
+        for effective, changed in self.close_changes:
+            if d >= effective:
+                close = changed
+        return close
+
+    def common_close(self, sessions) -> dt.time:
+        """Earliest close among ``sessions``: the window every one of them trades in.
+
+        Panels are a balanced grid (same slots every session), so data spanning a
+        change in trading hours is cut to this common window; the target then means
+        the same thing on every day.
+        """
+        return min((self.close_time_on(d) for d in sessions), default=self.close_time)
 
     def is_session(self, day: dt.date | str | pd.Timestamp) -> bool:
         d = to_date(day)
@@ -157,11 +188,13 @@ class NSECalendar:
         return pd.Timestamp(dt.datetime.combine(to_date(day), self.open_time), tz=self.tz)
 
     def session_close(self, day) -> pd.Timestamp:
-        return pd.Timestamp(dt.datetime.combine(to_date(day), self.close_time), tz=self.tz)
+        return pd.Timestamp(
+            dt.datetime.combine(to_date(day), self.close_time_on(day)), tz=self.tz
+        )
 
     def bar_starts(self, day, bar_minutes: int) -> pd.DatetimeIndex:
         """Start timestamps of every bar in a session, e.g. 09:15, 09:20, ..., 15:25."""
-        n = self.bars_per_session(bar_minutes)
+        n = self.bars_per_session(bar_minutes, self.close_time_on(day))
         return pd.date_range(self.session_open(day), periods=n, freq=f"{bar_minutes}min")
 
     def describe(self, day) -> str:

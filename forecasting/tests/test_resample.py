@@ -110,3 +110,38 @@ def test_synthetic_export_end_to_end(synthetic_export, calendar):
     validate_panel(panel)
     assert report.duplicates_dropped > 0 and report.rows_outside_hours > 0
     assert 0 < panel["is_missing"].mean() < 0.1
+
+
+def test_data_spanning_a_close_time_change_uses_the_common_window(calendar):
+    # Fri 31 Jul 2026 trades to 15:30; Mon 3 Aug 2026 (closing auction) only to 15:15.
+    raw = pd.concat(
+        [_candles("A", "2026-07-31", range(375)), _candles("A", "2026-08-03", range(360))],
+        ignore_index=True,
+    )
+    panel, report = build_bars(raw, calendar)
+    validate_panel(panel)
+    assert panel.attrs["bars_per_session"] == 72 and len(panel) == 2 * 72
+    assert not panel["is_missing"].any()  # the short day is complete, not "partial"
+    assert panel["ts"].dt.strftime("%H:%M").max() == "15:10"
+    assert report.rows_outside_hours == 15 and report.session_window == "09:15-15:15"
+    assert "15:15 from 2026-08-03" in report.to_markdown(calendar)
+
+    # Data entirely before the change keeps the full 75-bar session.
+    panel, report = build_bars(_candles("A", "2026-07-31", range(375)), calendar)
+    assert panel.attrs["bars_per_session"] == 75 and report.hours_note == ""
+
+
+def test_warns_when_recent_sessions_all_stop_early(calendar):
+    # A week in 2025 (no change listed): every day stops at 15:15 -> hours probably changed.
+    days = ["2025-01-06", "2025-01-07", "2025-01-08", "2025-01-09", "2025-01-10"]
+    short = pd.concat([_candles("A", d, range(360)) for d in days], ignore_index=True)
+    _, report = build_bars(short, calendar)
+    assert "no data after 15:15" in report.hours_warning
+    assert "close_changes" in report.to_markdown(calendar)
+
+    # One short day (an outage) or full days: no warning.
+    mixed = pd.concat(
+        [_candles("A", d, range(375)) for d in days[:4]] + [_candles("A", days[4], range(360))],
+        ignore_index=True,
+    )
+    assert build_bars(mixed, calendar)[1].hours_warning == ""

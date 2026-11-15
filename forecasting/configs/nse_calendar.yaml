@@ -15,6 +15,14 @@ timezone: Asia/Kolkata
 regular_session:
   open: "09:15"
   close: "15:30"
+  # From each date on, continuous trading ends at the given time instead.
+  # 2026-08-03: Closing Auction Session (SEBI circular of 16 Jan 2026) for stocks with
+  # derivatives: continuous trading stops at 15:15, the auction sets the close.
+  # Seen in the Kite candles: last 1-minute candle is 15:14 from this date.
+  # Data that spans a change is cut to the common window (09:15-15:15) for every
+  # session, so a forecast target means the same thing before and after.
+  close_changes:
+    2026-08-03: "15:15"
 
 years:
   2024:

@@ -70,7 +70,8 @@ def load_config(
     for h in raw.get("horizons") or []:
         h = dict(h)
         if h.get("bars") == "session":
-            h["bars"] = per_session
+            # Provisional: `load_panel` resets it to the session length of the data.
+            h["bars"], h["whole_session"] = per_session, True
         horizons.append(Horizon(**h))
     if not horizons:
         raise ValueError(f"{path}: no horizons configured")

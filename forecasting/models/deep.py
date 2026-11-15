@@ -23,18 +23,17 @@ picklable with the 'spawn' start method.
 
 from __future__ import annotations
 
-import os
-import logging
 import concurrent.futures as cf
+import logging
 import multiprocessing as mp
 from typing import Self
 
 import numpy as np
 import pandas as pd
 
-from forecasting.models.common import daily_rv, seasonal_profile
+from forecasting.data.panel import panel_symbols
 from forecasting.models.classical import DailyComponentModel
-from forecasting.data.panel import n_symbols, panel_symbols
+from forecasting.models.common import daily_rv, seasonal_profile
 
 log = logging.getLogger(__name__)
 
@@ -72,9 +71,9 @@ def _nbeats_train_job(
     """Train N-BEATS in the subprocess; returns state dict as numpy arrays."""
     import os as _os
     _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    import numpy as _np
     import torch
     import torch.nn as nn
-    import numpy as _np
 
     class _Block(nn.Module):
         def __init__(self) -> None:
@@ -171,6 +170,10 @@ def _nbeats_predict_job(
         return net(torch.tensor(x, dtype=torch.float32)).cpu().numpy()
 
 
+_CHRONOS_PIPELINES: dict = {}  # lives in the torch worker process
+_WARNED: set[str] = set()  # failures already reported (models are copied every fold)
+
+
 def _chronos_predict_job(
     contexts: list[np.ndarray],
     model_id: str,
@@ -182,9 +185,14 @@ def _chronos_predict_job(
     import torch
     from chronos import BaseChronosPipeline
 
-    pipeline = BaseChronosPipeline.from_pretrained(
-        model_id, device_map="cpu", torch_dtype=torch.float32
-    )
+    # The worker process is persistent: load the weights once, not on every forecast.
+    pipeline = _CHRONOS_PIPELINES.get(model_id)
+    if pipeline is None:
+        pipeline = BaseChronosPipeline.from_pretrained(
+            model_id, device_map="cpu", torch_dtype=torch.float32
+        )
+        _CHRONOS_PIPELINES[model_id] = pipeline
+    torch.manual_seed(0)  # sampled forecasts: keep reruns identical
     tensors = [torch.tensor(c, dtype=torch.float32) for c in contexts]
     samples = pipeline.predict(tensors, prediction_length=1, num_samples=num_samples)
     return samples[:, :, 0].median(dim=1).values.numpy()
@@ -257,7 +265,12 @@ class NBEATSRVModel(DailyComponentModel):
                 self.n_epochs, self.lr, self.batch_size, self.seed,
             ).result()
         except Exception as exc:
-            log.warning("%s: N-BEATS training failed (%s); no forecasts this fold", self.name, exc)
+            if self.name not in _WARNED:
+                _WARNED.add(self.name)
+                log.warning(
+                    "%s: N-BEATS training failed (%s: %s); no forecasts from it",
+                    self.name, type(exc).__name__, exc,
+                )
             self.state_dict_ = None
 
     def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
@@ -348,10 +361,11 @@ class ChronosRVModel(DailyComponentModel):
             for k, j in enumerate(valid_idx):
                 out[j] = float(np.exp(medians[k]))
         except Exception as exc:
-            if not getattr(self, "_warned", False):
+            if self.name not in _WARNED:
+                _WARNED.add(self.name)
                 log.warning(
                     "%s: Chronos unavailable (%s: %s); install with "
-                    "`uv sync --extra foundation`", self.name, type(exc).__name__, exc,
+                    "`uv sync --extra kite --extra deep --extra foundation`",
+                    self.name, type(exc).__name__, exc,
                 )
-                self._warned = True
         return out

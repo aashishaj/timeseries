@@ -51,6 +51,8 @@ def load_panel(cfg: ExperimentConfig) -> tuple[pd.DataFrame, BuildReport]:
         len(panel.attrs["symbols"]),
         panel.attrs["bars_per_session"],
     )
+    # "Whole session" horizons follow the session length of the data actually loaded.
+    cfg.horizons = [h.for_session(panel.attrs["bars_per_session"]) for h in cfg.horizons]
     return add_returns(panel), report
 
 
@@ -75,7 +77,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(md)
     if args.report:
         Path(args.report).write_text(md + "\n")
-    problems = report.unexpected_dates or report.empty_sessions or report.symbols_without_data
+    problems = (
+        report.unexpected_dates
+        or report.empty_sessions
+        or report.symbols_without_data
+        or report.hours_warning
+    )
     return 1 if (problems and args.strict) else 0
 
 
@@ -95,12 +102,12 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     wf = cfg.walk_forward
     if args.max_folds is not None:
         wf = type(wf)(**{**wf.__dict__, "max_folds": args.max_folds})
-    horizons = [h for h in cfg.horizons if not args.horizon or h.name in args.horizon]
     specs = [m for m in cfg.models if not args.model or m["name"] in args.model]
     if cfg.baseline not in {m["name"] for m in specs}:
         specs = [m for m in cfg.models if m["name"] == cfg.baseline] + specs
 
     panel, report = load_panel(cfg)
+    horizons = [h for h in cfg.horizons if not args.horizon or h.name in args.horizon]
     label = data_label(cfg.data_root)
     if args.final:
         split = "final"

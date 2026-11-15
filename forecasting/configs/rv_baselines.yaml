@@ -14,7 +14,7 @@ horizons:
     origin: intraday           # a forecast at every bar close with 30 min left in the session
     stride: 1
   - name: next_session
-    bars: session              # all 75 bars of the next session
+    bars: session              # every bar of the next session (75; 72 on the 09:15-15:15 window)
     origin: session_open       # forecast made before the open (after the previous close)
 
 walk_forward:

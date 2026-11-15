@@ -92,6 +92,11 @@ symbol has data. **Check the calendar against NSE's circulars, especially for 20
 * **Bars:** 5-minute bars aligned to the open, 09:15–15:30 IST, giving 75 per session.
   Pre-open, the closing session, holidays and special sessions (such as Muhurat) are
   dropped and counted.
+* **Trading-hours change.** From 3 Aug 2026 continuous trading ends at 15:15 (the
+  closing auction session took over the last 15 minutes); see `close_changes` in
+  `configs/nse_calendar.yaml`. Data that spans the change is cut to the window every
+  session shares, 09:15–15:15 (72 bars), so "the next session's RV" means the same
+  thing before and after. `validate` says so in its report.
 * **Gaps:** a bar with no source candles stays NaN (`is_missing`). Gaps are never
   forward-filled, and a return is never computed across a gap.
 * **Returns:** `100 * log(close_t / close_{t-1})` within a session. The first bar uses
@@ -101,7 +106,8 @@ symbol has data. **Check the calendar against NSE's circulars, especially for 20
 * **Horizons** (`configs/rv_baselines.yaml`):
   * `30min`: `h = 6`, with an origin at every bar boundary that leaves 30 minutes
     in the session.
-  * `next_session`: `h = 75`, with one origin per session before the open.
+  * `next_session`: every bar of the session (`h = 75`, or 72 on the 09:15–15:15
+    window), with one origin per session before the open.
 
 ## Evaluation rules
 
@@ -120,7 +126,14 @@ symbol has data. **Check the calendar against NSE's circulars, especially for 20
       itself tested against deliberately leaky features (`shift(-1)`, full-sample
       z-score, centred windows).
 * **Common sample.** Every model is scored on the same (origin, symbol) pairs. A pair
-  counts only if its target is observed and every model produced a forecast.
+  counts only if its target is observed and every scored model produced a forecast.
+  A model that forecasts less than half of the targets (for example because an
+  optional dependency is missing) is listed as "not scored" instead of shrinking the
+  sample for everyone.
+* **Forecast floor.** A forecast below 0.1% of the median target is raised to that
+  level before scoring, and counted (`floored`). No real window is that quiet (it is
+  about one tick of movement), and without the floor a single zero forecast, which
+  has infinite QLIKE, decides the whole comparison.
 * **Metrics vs naive.**
   * QLIKE and MSE are computed on variance (Patton 2011).
   * MASE is MAE divided by the naive model's MAE on the same out-of-sample origins,

@@ -13,10 +13,9 @@ Fairness rules:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
-
-import logging
 
 import numpy as np
 import pandas as pd
@@ -33,6 +32,7 @@ from forecasting.backtest.metrics import (
 log = logging.getLogger(__name__)
 
 MIN_COVERAGE = 0.5
+FLOOR_REL = 1e-3
 
 
 def _scored_models(
@@ -65,7 +65,7 @@ def evaluate(
     baseline: str = "naive",
     horizons: Mapping[str, Horizon] | None = None,
     rungs: Mapping[str, int] | None = None,
-    floor_rel: float = 1e-6,
+    floor_rel: float = FLOOR_REL,
     min_coverage: float = MIN_COVERAGE,
 ) -> Evaluation:
     """Evaluate the output of :func:`run_walk_forward` for one or more models/horizons.
@@ -76,8 +76,14 @@ def evaluate(
         horizons: used for the target-window overlap in the HAC lag.
         rungs: ladder rung per model. Each model in rung r > 1 is also compared to the
             best (lowest QLIKE) model of all lower rungs on the same sample.
-        floor_rel: forecasts below ``floor_rel * median(y)`` are floored before QLIKE
-            (a zero variance forecast has infinite QLIKE); the count is reported.
+        floor_rel: forecasts below ``floor_rel * median(y)`` are floored before scoring
+            (a zero variance forecast has infinite QLIKE); the count is reported. The
+            default, 0.1% of the median target, is about the smallest RV a one-tick
+            move allows (the smallest 30-minute RV in a year of NSE large caps is 0.09%
+            of the median): no real window is quieter, so a lower forecast is not a
+            forecast. With a much smaller floor, two zero forecasts out of 88,698
+            (a stock that did not move for 30 minutes) took naive's mean QLIKE from
+            1.3 to 10.0 and made every "vs naive" ratio meaningless.
         min_coverage: models forecasting less than this share of valid targets are
             reported but not scored, and do not shrink the common sample.
     """
@@ -100,7 +106,7 @@ def evaluate(
         models, coverage = _scored_models(yhat, target_ok, baseline, min_coverage, hname)
         mask = target_ok & np.isfinite(yhat[models]).all(axis=1)
         if not mask.any():
-            raise ValueError(f"no (origin, symbol) pair has a forecast from every model for {hname}")
+            raise ValueError(f"{hname}: no (origin, symbol) pair is forecast by every model")
         yv = y[mask].to_numpy()
         floor = floor_rel * float(np.median(yv)) if len(yv) else 0.0
         origins = y.index.get_level_values("origin_ts")[mask]

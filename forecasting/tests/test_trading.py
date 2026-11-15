@@ -69,3 +69,10 @@ def test_gross_exposure_cap_is_respected():
     cfg = VolTargetConfig(target_annual_vol=1.0, max_gross_leverage=1.5)
     m = vol_target_backtest(panel, forecasts, cfg).metrics
     assert (m["avg_gross"] <= 1.5 + 1e-9).all()
+
+
+def test_model_without_forecasts_is_left_out_of_paper_trading():
+    panel, forecasts = _heteroskedastic(n_sessions=30)
+    dead = forecasts[forecasts["model"] == "flat"].assign(model="dead", yhat=np.nan)
+    m = vol_target_backtest(panel, pd.concat([forecasts, dead]), VolTargetConfig()).metrics
+    assert "dead" not in m.index and {"perfect", "flat", "constant"} <= set(m.index)

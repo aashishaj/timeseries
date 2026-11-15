@@ -17,6 +17,7 @@ Timeline, in sessions::
 from __future__ import annotations
 
 import copy
+import dataclasses
 import logging
 import time
 from dataclasses import dataclass
@@ -45,12 +46,22 @@ class Horizon:
     ``origin="intraday"``: origins at every ``stride``-th bar boundary in the session
     such that the window ends by the close (windows never cross sessions).
     ``origin="session_open"``: one origin per session, before the first bar.
+    ``whole_session=True``: ``bars`` means "every bar of a session"; it is set to the
+    panel's session length by :meth:`for_session` once the data is loaded (75 bars
+    normally, 72 when the common trading window ends at 15:15).
     """
 
     name: str
     bars: int
     origin: Literal["intraday", "session_open"] = "intraday"
     stride: int = 1
+    whole_session: bool = False
+
+    def for_session(self, bars_per_session: int) -> Horizon:
+        """This horizon on a panel with ``bars_per_session`` bars per session."""
+        if self.whole_session and self.bars != bars_per_session:
+            return dataclasses.replace(self, bars=bars_per_session)
+        return self
 
     def origin_slots(self, bars_per_session: int) -> np.ndarray:
         if not 1 <= self.bars <= bars_per_session:

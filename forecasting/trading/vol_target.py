@@ -20,6 +20,7 @@ Positions use only forecasts made before the open, from the walk-forward backtes
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,6 +28,8 @@ import pandas as pd
 
 from forecasting.data.panel import bars_per_session, n_symbols, panel_symbols, to_matrix
 from forecasting.trading.costs import CostModel
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,9 @@ def vol_target_backtest(
             index=rets.index, columns=symbols
         )
         daily_vol = np.sqrt(fc.where(fc > 0)) / 100.0
+        if not daily_vol.notna().any().any():
+            log.warning("%s: no usable forecasts; left out of paper trading", model)
+            continue
         weights[model] = (cfg.target_daily_vol / s) / daily_vol
 
     daily, rows = {}, {}

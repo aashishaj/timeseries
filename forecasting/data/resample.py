@@ -5,12 +5,15 @@ Cleaning rules (all counted in :class:`BuildReport`, nothing is dropped silently
 * duplicate (symbol, ts) rows: keep the last one (pipeline restarts can re-emit candles)
 * rows with impossible prices (<= 0, high < low): dropped
 * rows on dates that are not sessions: dropped (holidays, weekends, Muhurat, ...)
-* rows outside 09:15-15:30 IST (pre-open, closing session): dropped
+* rows outside the continuous session (pre-open, closing session): dropped. The
+  session is 09:15-15:30 IST, or the window common to every session in the data
+  when trading hours changed in between (see ``NSECalendar.common_close``)
 * bars with no source candles: kept as NaN rows with ``is_missing=True`` so the
   time grid stays calendar-aligned. Gaps are never forward-filled.
 
 Bars are aligned to the session open, so 5-minute bars are 09:15-09:20, ...,
-15:25-15:30 (75 per session). A bar's timestamp is its start.
+15:25-15:30 (75 per session; 72 when the common window ends at 15:15). A bar's
+timestamp is its start.
 """
 
 from __future__ import annotations
@@ -38,6 +41,9 @@ class BuildReport:
     rows_non_session_date: int = 0
     rows_outside_hours: int = 0
     rows_used: int = 0
+    session_window: str = "09:15-15:30"
+    hours_note: str = ""
+    hours_warning: str = ""
     first_session: dt.date | None = None
     last_session: dt.date | None = None
     n_sessions: int = 0
@@ -56,8 +62,12 @@ class BuildReport:
             f"- duplicate rows dropped: {self.duplicates_dropped:,}",
             f"- invalid price rows dropped: {self.invalid_price_rows:,}",
             f"- rows on non-session dates dropped: {self.rows_non_session_date:,}",
-            f"- rows outside 09:15-15:30 dropped: {self.rows_outside_hours:,}",
+            f"- rows outside {self.session_window} dropped: {self.rows_outside_hours:,}",
         ]
+        if self.hours_note:
+            lines.append(f"- {self.hours_note}")
+        if self.hours_warning:
+            lines.append(f"- **{self.hours_warning}**")
         if self.symbols_without_data:
             lines.append(f"- **symbols with no data (excluded):** {self.symbols_without_data}")
 
@@ -125,7 +135,6 @@ def build_bars(
             f"bar_minutes={bar_minutes} is not a multiple of the source interval "
             f"({source_interval_minutes} min)"
         )
-    n_slots = calendar.bars_per_session(bar_minutes)
     report = BuildReport(rows_in=len(candles))
     df = candles
     if symbols is not None:
@@ -147,10 +156,29 @@ def build_bars(
     report.unexpected_dates = [d for d in off_days if d not in calendar.special_sessions]
     report.rows_non_session_date = int((~on_session).sum())
     df = df.loc[on_session]
+    if df.empty:
+        raise ValueError("no usable candles for any requested symbol")
+
+    # The session window: the hours every session in the data trades in.
+    day = df["ts"].dt.date
+    lo = max(to_date(start), day.min()) if start else day.min()
+    hi = min(to_date(end), day.max()) if end else day.max()
+    close = calendar.common_close(calendar.sessions(lo, hi))
+    session_minutes = calendar.minutes_to(close)
+    n_slots = calendar.bars_per_session(bar_minutes, close)
+    report.session_window = f"{calendar.open_time:%H:%M}-{close:%H:%M}"
+    if close != calendar.close_time:
+        changed = [f"{t:%H:%M} from {d}" for d, t in calendar.close_changes]
+        report.hours_note = (
+            f"continuous trading ends at {', '.join(changed)} (normally "
+            f"{calendar.close_time:%H:%M}); every session uses the common "
+            f"{report.session_window} window so all days are comparable"
+        )
+        log.info(report.hours_note)
 
     open_minutes = calendar.open_time.hour * 60 + calendar.open_time.minute
     minute = (df["ts"].dt.hour * 60 + df["ts"].dt.minute - open_minutes).to_numpy()
-    in_hours = (minute >= 0) & (minute < calendar.session_minutes)
+    in_hours = (minute >= 0) & (minute < session_minutes)
     report.rows_outside_hours = int((~in_hours).sum())
     df = df.loc[in_hours]
     df = df.assign(session=df["ts"].dt.date, slot=minute[in_hours] // bar_minutes)
@@ -204,9 +232,36 @@ def build_bars(
     }
 
     report.per_symbol = _per_symbol_quality(panel, n_slots)
+    report.hours_warning = _early_close_warning(panel, calendar, len(sessions), n_slots)
+    if report.hours_warning:
+        log.warning(report.hours_warning)
     sess_present = (~panel["is_missing"]).groupby(panel["session"]).any()
     report.empty_sessions = sorted(sess_present.index[~sess_present.to_numpy()].tolist())
     return panel, report
+
+
+def _early_close_warning(
+    panel: pd.DataFrame, calendar: NSECalendar, n_sessions: int, n_slots: int, recent: int = 5
+) -> str:
+    """Flag a likely change in trading hours: the newest sessions all stop at the same
+    time, before the close, for every symbol. Left alone, those days would count as
+    "partial" and every target touching their last bars would be thrown away."""
+    if n_sessions < recent:
+        return ""
+    present = (~panel["is_missing"].to_numpy()).reshape(n_sessions, n_slots, -1).any(axis=2)
+    tail = present[-recent:]
+    if not tail.any(axis=1).all():
+        return ""
+    last = n_slots - 1 - np.argmax(tail[:, ::-1], axis=1)  # last slot with data, per session
+    if last[0] == n_slots - 1 or (last != last[0]).any():
+        return ""
+    bar_minutes = int(panel.attrs["bar_minutes"])
+    stop = calendar.open_time.hour * 60 + calendar.open_time.minute + (last[0] + 1) * bar_minutes
+    return (
+        f"the last {recent} sessions have no data after {stop // 60:02d}:{stop % 60:02d} for "
+        "any symbol: trading hours may have changed. If so, add the date under "
+        "regular_session.close_changes in nse_calendar.yaml"
+    )
 
 
 def _per_symbol_quality(panel: pd.DataFrame, n_slots: int) -> pd.DataFrame:

@@ -9,7 +9,7 @@ the Mac: never in this repo, never in chat, never in the cloud.
 curl -LsSf https://astral.sh/uv/install.sh | sh        # Python tool manager
 git clone https://github.com/aashishaj/timeseries && cd timeseries
 git checkout claude/nse-volatility-forecasting-w1h02e
-uv sync --extra kite --extra deep                       # installs everything (torch for rung 4)
+uv sync --extra kite --extra deep --extra foundation    # everything (torch + Chronos for rung 4)
 ```
 
 If LightGBM later complains about `libomp`: `brew install libomp`.
@@ -49,6 +49,9 @@ uv run forecasting run-all --data-root data/kite          # ~20-40 min
   interrupted. Use `--start 2024-11-01` for more history.
 * `run-all` checks the data, backtests every model on the development period,
   simulates the paper trading, and writes `results/run_kite/REPORT.md`.
+* Since 3 Aug 2026 the candles stop at 15:14 instead of 15:29: continuous trading
+  now ends at 15:15 (closing auction session). The run uses 09:15-15:15 for every
+  session so all days are comparable; the data-quality section of the report says so.
 * The lockbox (last 40 sessions) stays sealed. Open it once, at the very end,
   with `uv run forecasting backtest --config forecasting/configs/rv_ladder.yaml
   --data-root data/kite --final`.

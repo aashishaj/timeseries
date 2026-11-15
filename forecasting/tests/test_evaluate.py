@@ -77,3 +77,17 @@ def test_model_without_forecasts_is_reported_but_does_not_empty_the_sample():
     assert s.loc["bad", "coverage"] == 0 and np.isnan(s.loc["bad", "QLIKE"])
     acc = plain_accuracy(f).set_index("model")
     assert np.isfinite(acc.loc["good", "explained"]) and np.isnan(acc.loc["bad", "explained"])
+
+
+def test_a_zero_forecast_is_floored_and_does_not_swamp_the_average():
+    f = _forecasts(n=200)
+    clean = evaluate(f).summary.set_index("model")
+    f.loc[f.index[(f["model"] == "naive")][0], "yhat"] = 0.0  # "no volatility at all"
+    s = evaluate(f).summary.set_index("model")
+    assert s.loc["naive", "floored"] == 1
+    # One absurd forecast in 400 is punished (about 1/floor_rel / 400), but boundedly...
+    assert clean.loc["naive", "QLIKE"] < s.loc["naive", "QLIKE"] < 10
+    assert s.loc["good", "QLIKE"] == pytest.approx(clean.loc["good", "QLIKE"])
+    # ...whereas a near-zero floor lets that single row decide every comparison.
+    tiny = evaluate(f, floor_rel=1e-9).summary.set_index("model")
+    assert tiny.loc["naive", "QLIKE"] > 1e5

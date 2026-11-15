@@ -181,3 +181,10 @@ def test_forecast_contract_is_enforced():
         "AAA": 1.0,
         "BBB": 2.0,
     }
+
+
+def test_whole_session_horizon_follows_the_panel_session_length():
+    day = Horizon("next_session", 75, "session_open", whole_session=True)
+    assert day.for_session(72).bars == 72 and day.for_session(75) is day
+    assert day.for_session(72).origin_slots(72).tolist() == [0]
+    assert Horizon("30min", 6).for_session(72).bars == 6  # fixed-length horizons unchanged

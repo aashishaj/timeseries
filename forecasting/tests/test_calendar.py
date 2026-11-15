@@ -59,3 +59,17 @@ def test_yaml_rejects_holiday_that_is_also_extra_session(tmp_path):
     )
     with pytest.raises(ValueError, match="both holidays and extra sessions"):
         NSECalendar.from_yaml(p)
+
+
+def test_close_time_changes_from_the_closing_auction_date(calendar):
+    # Closing Auction Session: continuous trading ends 15:15 from 3 Aug 2026.
+    assert calendar.close_time_on(D(2026, 7, 31)) == dt.time(15, 30)
+    assert calendar.close_time_on(D(2026, 8, 3)) == dt.time(15, 15)
+    assert calendar.bars_per_session(5, calendar.close_time_on(D(2026, 8, 3))) == 72
+    assert len(calendar.bar_starts(D(2026, 8, 3), 5)) == 72
+    assert calendar.session_close(D(2026, 8, 3)).time() == dt.time(15, 15)
+    before = calendar.sessions("2026-07-01", "2026-07-31")
+    spanning = calendar.sessions("2026-07-01", "2026-08-31")
+    assert calendar.common_close(before) == dt.time(15, 30)
+    assert calendar.common_close(spanning) == dt.time(15, 15)
+    assert NSECalendar().close_time_on(D(2030, 1, 1)) == dt.time(15, 30)  # no changes listed
