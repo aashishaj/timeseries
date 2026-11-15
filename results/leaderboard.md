@@ -48,6 +48,50 @@ a top result may be luck, so the lockbox (`split = final`) is the number that co
 | naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-15 09:15 |
 | nbeats | 1.025 | 0.928 | 1.002 | 0.7 | 5/10 | `nbeats, intraday_beta=0.5, lookback_days=30, n_blocks=4, n_epochs=100, width=64` | 2026-11-15 09:15 |
 
+## real:kite / final / 30min (17 trials)
+
+| model | QLIKE / naive | MSE / naive | MASE | DM p | beats naive | spec | run |
+|---|---|---|---|---|---|---|---|
+| lgbm | 0.299 | 0.220 | 0.561 | 1e-06 | 10/10 | `lightgbm` | 2026-11-15 09:22 |
+| combo_opt | 0.299 | 0.220 | 0.575 | 1.1e-06 | 10/10 | `combination, members=[{'type': 'lightgbm'}, {'type': 'garch'}, {'type': 'arma_logrv', 'params': {'order': [1, 1], 'intraday_beta': 0.5}}, {'type': 'har', 'params': {'pooled': True, 'intraday_beta': 0.5}}], method=qlike_opt` | 2026-11-15 09:22 |
+| combo_equal | 0.307 | 0.227 | 0.575 | 2.2e-06 | 10/10 | `combination, members=[{'type': 'lightgbm'}, {'type': 'garch'}, {'type': 'arma_logrv', 'params': {'order': [1, 1], 'intraday_beta': 0.5}}, {'type': 'har', 'params': {'pooled': True, 'intraday_beta': 0.5}}], method=equal` | 2026-11-15 09:22 |
+| ewma_hl1 | 0.314 | 0.237 | 0.589 | 3.3e-06 | 10/10 | `ewma, halflife_sessions=1.0` | 2026-11-15 09:22 |
+| gjr_garch | 0.316 | 0.226 | 0.571 | 2e-06 | 10/10 | `garch, asymmetric=True` | 2026-11-15 09:22 |
+| garch | 0.316 | 0.229 | 0.571 | 1.9e-06 | 10/10 | `garch, asymmetric=False` | 2026-11-15 09:22 |
+| ewma_hl5 | 0.329 | 0.248 | 0.576 | 4.4e-06 | 10/10 | `ewma, halflife_sessions=5.0` | 2026-11-15 09:22 |
+| har_pooled | 0.334 | 0.241 | 0.636 | 8.1e-06 | 10/10 | `har, pooled=True` | 2026-11-15 09:22 |
+| har | 0.334 | 0.242 | 0.634 | 7.6e-06 | 10/10 | `har, pooled=False` | 2026-11-15 09:22 |
+| arma_logrv_mix | 0.335 | 0.245 | 0.623 | 7.7e-06 | 10/10 | `arma_logrv, intraday_beta=0.5, order=[1, 1]` | 2026-11-15 09:22 |
+| har_mix | 0.337 | 0.244 | 0.633 | 7.8e-06 | 10/10 | `har, intraday_beta=0.5, pooled=True` | 2026-11-15 09:22 |
+| chronos_tiny | 0.352 | 0.251 | 0.588 | 1.2e-05 | 10/10 | `chronos, intraday_beta=0.5, model_id=amazon/chronos-t5-tiny, num_samples=100` | 2026-11-15 09:22 |
+| nbeats_deep | 0.352 | 0.254 | 0.590 | 1.2e-05 | 10/10 | `nbeats, intraday_beta=0.5, lookback_days=60, n_blocks=6, n_epochs=150, width=128` | 2026-11-15 09:22 |
+| nbeats | 0.373 | 0.265 | 0.642 | 2.4e-05 | 10/10 | `nbeats, intraday_beta=0.5, lookback_days=30, n_blocks=4, n_epochs=100, width=64` | 2026-11-15 09:22 |
+| seasonal_mean_5d | 0.421 | 0.274 | 0.660 | 4e-05 | 10/10 | `seasonal_naive, n_sessions=5` | 2026-11-15 09:22 |
+| hist_mean | 0.442 | 0.304 | 0.742 | 0.00017 | 10/10 | `historical_mean` | 2026-11-15 09:22 |
+| naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-15 09:22 |
+
+## real:kite / final / next_session (17 trials)
+
+| model | QLIKE / naive | MSE / naive | MASE | DM p | beats naive | spec | run |
+|---|---|---|---|---|---|---|---|
+| combo_opt | 0.616 | 0.562 | 0.800 | 4.1e-07 | 10/10 | `combination, members=[{'type': 'lightgbm'}, {'type': 'garch'}, {'type': 'arma_logrv', 'params': {'order': [1, 1], 'intraday_beta': 0.5}}, {'type': 'har', 'params': {'pooled': True, 'intraday_beta': 0.5}}], method=qlike_opt` | 2026-11-15 09:22 |
+| combo_equal | 0.630 | 0.565 | 0.763 | 3.6e-09 | 10/10 | `combination, members=[{'type': 'lightgbm'}, {'type': 'garch'}, {'type': 'arma_logrv', 'params': {'order': [1, 1], 'intraday_beta': 0.5}}, {'type': 'har', 'params': {'pooled': True, 'intraday_beta': 0.5}}], method=equal` | 2026-11-15 09:22 |
+| lgbm | 0.663 | 0.579 | 0.788 | 8.1e-07 | 10/10 | `lightgbm` | 2026-11-15 09:22 |
+| har_mix | 0.667 | 0.616 | 0.823 | 1.3e-08 | 10/10 | `har, intraday_beta=0.5, pooled=True` | 2026-11-15 09:22 |
+| har_pooled | 0.667 | 0.616 | 0.823 | 1.3e-08 | 10/10 | `har, pooled=True` | 2026-11-15 09:22 |
+| har | 0.691 | 0.628 | 0.836 | 4.9e-07 | 10/10 | `har, pooled=False` | 2026-11-15 09:22 |
+| arma_logrv_mix | 0.694 | 0.631 | 0.808 | 9.9e-08 | 10/10 | `arma_logrv, intraday_beta=0.5, order=[1, 1]` | 2026-11-15 09:22 |
+| ewma_hl1 | 0.728 | 0.615 | 0.785 | 0.00091 | 9/10 | `ewma, halflife_sessions=1.0` | 2026-11-15 09:22 |
+| gjr_garch | 0.791 | 0.653 | 0.804 | 0.011 | 8/10 | `garch, asymmetric=True` | 2026-11-15 09:22 |
+| garch | 0.793 | 0.662 | 0.806 | 0.012 | 8/10 | `garch, asymmetric=False` | 2026-11-15 09:22 |
+| ewma_hl5 | 0.816 | 0.688 | 0.806 | 0.099 | 9/10 | `ewma, halflife_sessions=5.0` | 2026-11-15 09:22 |
+| seasonal_mean_5d | 0.827 | 0.733 | 0.928 | 0.025 | 8/10 | `seasonal_naive, n_sessions=5` | 2026-11-15 09:22 |
+| hist_mean | 0.914 | 0.729 | 0.843 | 0.31 | 5/10 | `historical_mean` | 2026-11-15 09:22 |
+| chronos_tiny | 0.994 | 0.718 | 0.834 | 0.94 | 5/10 | `chronos, intraday_beta=0.5, model_id=amazon/chronos-t5-tiny, num_samples=100` | 2026-11-15 09:22 |
+| naive | 1.000 | 1.000 | 1.000 | - | - | `random_walk` | 2026-11-15 09:22 |
+| nbeats_deep | 1.173 | 0.765 | 0.863 | 0.26 | 4/10 | `nbeats, intraday_beta=0.5, lookback_days=60, n_blocks=6, n_epochs=150, width=128` | 2026-11-15 09:22 |
+| nbeats | 1.424 | 1.012 | 1.067 | 0.0084 | 1/10 | `nbeats, intraday_beta=0.5, lookback_days=30, n_blocks=4, n_epochs=100, width=64` | 2026-11-15 09:22 |
+
 ## synthetic / dev / 30min (15 trials)
 
 | model | QLIKE / naive | MSE / naive | MASE | DM p | beats naive | spec | run |

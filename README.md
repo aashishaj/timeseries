@@ -22,6 +22,26 @@ Each rung has to beat the one before it, out of sample, against naive.
 | 4. Deep / foundation | N-BEATS (two sizes); zero-shot Chronos | done (does not beat rung 3 at 30 min or rung 2 at next session) |
 | 5. Combinations | equal and QLIKE-optimized geometric blends of rungs 2-3 | done (no significant gain) |
 
+## Results on real data
+
+One year of Kite 1-minute candles (12 Nov 2025 – 12 Nov 2026) for RELIANCE, HDFCBANK,
+ICICIBANK, INFY, TCS, BHARTIARTL, SBIN, ITC, LT and KOTAKBANK. Models were chosen on
+the development period; the last 40 sessions (15 Sep – 12 Nov 2026) were a lockbox,
+opened once after the final set was written down.
+
+| horizon | final model | QLIKE vs naive (lockbox) | vs best lower rung (lockbox) | verdict |
+|---|---|---|---|---|
+| next 30 min | `lgbm` (rung 3) | 0.299 (p = 1e-06) | 0.952 × `ewma_hl1` (p = 0.005) | confirmed |
+| next session | `arma_logrv_mix` (rung 2) | 0.694 (p = 1e-07) | 0.840 × `seasonal_mean_5d` (p = 0.0009) | confirmed |
+
+* Rung 3 does not beat rung 2 at the next-session horizon, rung 4 (N-BEATS, Chronos)
+  beats neither, and combinations add nothing significant, in development and on
+  the lockbox.
+* Simulated intraday volatility targeting loses to costs (about 25–30% of capital a
+  year) whatever the forecast; better forecasts only give better risk control.
+* Details: [development](results/run_kite/REPORT.md),
+  [lockbox](results/lockbox_kite/results.md), [log](PROGRESS.md).
+
 ## Layout
 
 ```

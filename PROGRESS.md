@@ -23,7 +23,8 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
       none beats rung 3 at 30 min or rung 2 at next session.
 - [x] Real data: one year of Kite 1-minute candles (10 large caps), development
       results in `results/run_kite/REPORT.md`.
-- [ ] Lockbox: final set fixed below (round 6); opened once, after this entry.
+- [x] Lockbox (opened once, 2026-11-15, at commit 2bc461f): both claims confirmed on
+      real data. `lgbm` at 30 min, `arma_logrv_mix` at next session.
 
 ## Blockers / needs from the owner
 
@@ -31,6 +32,43 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
   is only needed again before downloading new candles.
 
 ## Log
+
+### 2026-11-15, round 7: lockbox
+- Opened once, with the code and final set of commit 2bc461f: 40 sessions
+  (2026-09-15 -> 2026-11-12), every model refit every 5 sessions on all earlier data.
+  26,800 forecasts per model at 30 min, 400 at next session, nothing excluded.
+  `results/lockbox_kite/results.md`.
+- **Claim 1, 30min, `lgbm`: confirmed.** QLIKE 0.299 x naive (DM p=1e-06, better on
+  10/10 symbols). Against rung 2: 0.946 x garch (the comparator picked on development
+  data, p=4e-08) and 0.952 x ewma_hl1 (the best rung-2 model on the lockbox itself,
+  p=0.005).
+- **Claim 2, next_session, `arma_logrv_mix`: confirmed.** QLIKE 0.694 x naive
+  (p=1e-07, 10/10 symbols) and 0.840 x seasonal_mean_5d, the best rung-1 model
+  (p=0.0009).
+- Not claimed, for the record:
+  - Rung 3 at next session: lgbm 0.663 x naive, 0.956 x arma (p=0.35) and 0.995 x
+    har_pooled (p=0.91): still no significant gain over rung 2.
+  - Rung 4 fails on the lockbox too. 30min: chronos_tiny 1.18 x lgbm, nbeats_deep
+    1.18 x, nbeats 1.25 x. Next session: chronos_tiny 0.99 x naive (no better than
+    naive), nbeats_deep 1.17 x naive, nbeats 1.42 x naive (worse than naive).
+  - Combinations: combo_opt 0.928 x lgbm at next session (p=0.18), 1.000 x at 30min:
+    not significant.
+- Size of the win in plain terms (lockbox): at 30 min lgbm's median volatility error
+  is 31% (naive 40%) and 42% of its forecasts land within +-25% of what happened
+  (naive 33%). At next session arma: 18% median error (naive 20%), 63% within +-25%
+  (naive 57%).
+- Paper trading on the lockbox (40 sessions, too few to read returns): every version
+  loses 24-33% a year annualized, costs 25-30% a year. Risk control is again better
+  with the better forecasts (std of return / forecast vol: combo_opt 1.07, har_pooled 1.08,
+  arma 1.11, naive 1.18, nbeats 1.30).
+- **This is the project's positive result:** on real NSE data, out of sample and on
+  a lockbox used once, a boosted-tree model with volatility indicators forecasts
+  30-minute realized variance better than every simpler model, and ARMA on log daily
+  RV forecasts next-session variance better than the baselines. Deep and foundation
+  models (at this size, with one year of data) do not help. The forecasts are useful
+  for risk sizing, not as a source of intraday profit after costs.
+- The lockbox is now spent for this data. New claims need new data (later sessions
+  from `backfill-kite`), with a new lockbox.
 
 ### 2026-11-15, round 6: real data
 - **First run on real Kite data** (2025-11-12 -> 2026-11-12, 248 sessions, RELIANCE,
@@ -69,7 +107,7 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
   better risk control (std of return / forecast vol: har 1.01-1.02, lgbm 1.05,
   naive 1.21). Daily intraday round trips are not a way to earn from this.
 - **Final set for the lockbox, fixed before opening it** (last 40 sessions,
-  2026-09-14 -> 2026-11-12, all after the trading-hours change):
+  2026-09-15 -> 2026-11-12, all after the trading-hours change):
   - 30min: `lgbm`. Claim: QLIKE below naive and below the best rung-2 model.
   - next_session: `arma_logrv_mix`. Claim: QLIKE below naive and below the best
     rung-1 model.
