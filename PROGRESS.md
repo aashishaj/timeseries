@@ -19,18 +19,62 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 - [x] Ensembles (equal and QLIKE-optimized geometric combinations): no significant gain
 - [x] Simulated paper trading with NSE costs (vol targeting)
 - [x] Real-data tooling: `kite-login`, `backfill-kite`, `run-all`, REAL_DATA.md
-- [~] Rung 4: N-BEATS built and tested; does not beat rung 3 on synthetic dev.
-      Chronos (zero-shot) built; not yet benchmarked (needs network to fetch weights).
-      Real-data results pending.
+- [x] Rung 4: N-BEATS (two sizes) and zero-shot Chronos, on synthetic and real data:
+      none beats rung 3 at 30 min or rung 2 at next session.
+- [x] Real data: one year of Kite 1-minute candles (10 large caps), development
+      results in `results/run_kite/REPORT.md`.
+- [ ] Lockbox: final set fixed below (round 6); opened once, after this entry.
 
 ## Blockers / needs from the owner
 
-- **Real data.** Run `uv run forecasting kite-login --remember-secret` in Terminal,
-  then `uv run forecasting backfill-kite --out data/kite` and
-  `uv run forecasting run-all --data-root data/kite`.
-  Setup: `uv sync --extra kite --extra deep`.
+- None. The Kite access token expires every morning; `uv run forecasting kite-login`
+  is only needed again before downloading new candles.
 
 ## Log
+
+### 2026-11-15, round 6: real data
+- **First run on real Kite data** (2025-11-12 -> 2026-11-12, 248 sessions, RELIANCE,
+  HDFCBANK, ICICIBANK, INFY, TCS, BHARTIARTL, SBIN, ITC, LT, KOTAKBANK). Three things
+  had to be fixed before the numbers meant anything:
+  1. *Crash.* Chronos was not installed (it is in the `foundation` extra), returned NaN
+     everywhere, and the common-sample rule left zero rows to score. Models that
+     forecast < 50% of targets are now listed as "not scored" instead.
+  2. *Trading hours changed.* Every session from 2026-08-03 ends at 15:15, not 15:30
+     (closing auction session). Those days were counted as "partial", which threw
+     away a third of the next-session targets in development and would have thrown
+     away all of them in the lockbox. Sessions now use the window they all share,
+     09:15-15:15 (72 bars); `close_changes` in `nse_calendar.yaml` records the date.
+     Cost: 15:15-15:30 held ~2% of a day's variance before the change. `validate`
+     now warns when the newest sessions all stop early.
+  3. *Forecast floor.* Naive forecast exactly zero twice in 88,698 (ITC did not move
+     for 30 minutes on 2026-08-10). With the old floor (1e-6 of the median target)
+     those two rows took naive's 30-min QLIKE from 1.3 to 10.0, so every model
+     looked like "0.04 x naive". The floor is now 1e-3 of the median target (about
+     the smallest RV a one-tick move allows).
+- **Development results** (148 scored sessions, 2026-02-06 -> 2026-09-11; QLIKE vs
+  naive; vs best lower rung, DM p):
+  - 30min: lgbm 0.329 (0.950 x garch, p=2e-13): rung 3 passes. chronos_tiny 0.378
+    (1.149 x lgbm), nbeats_deep 0.379 (1.150 x), nbeats 0.397 (1.206 x): rung 4
+    does NOT pass. combo_opt 0.329 (0.999 x lgbm, p=0.68): no gain.
+  - next_session: arma_logrv_mix 0.627 (0.866 x seasonal_mean_5d, p=0.0004): rung 2
+    passes. lgbm 0.675 (1.076 x arma, p=0.02): rung 3 does NOT pass. chronos_tiny
+    0.790, nbeats_deep 0.828, nbeats 1.025: rung 4 does NOT pass. combo_equal 0.619
+    (0.987 x arma, p=0.48): no gain.
+  - Same ranking as on synthetic data. Common sample: 85,758 (30min) and 1,280
+    (next session) forecasts per model; the only exclusions are the first 20 scored
+    sessions, where nbeats_deep (60-day lookback) has no forecast yet.
+- **Paper trading** (long at the open, flat at the close, vol targeting): every
+  version loses 32-46% a year; costs alone are 24-30% of capital a year and the
+  open-to-close drift of these stocks was negative. Better forecasts still give
+  better risk control (std of return / forecast vol: har 1.01-1.02, lgbm 1.05,
+  naive 1.21). Daily intraday round trips are not a way to earn from this.
+- **Final set for the lockbox, fixed before opening it** (last 40 sessions,
+  2026-09-14 -> 2026-11-12, all after the trading-hours change):
+  - 30min: `lgbm`. Claim: QLIKE below naive and below the best rung-2 model.
+  - next_session: `arma_logrv_mix`. Claim: QLIKE below naive and below the best
+    rung-1 model.
+  - A claim is confirmed if the ratio is < 1 with DM p < 0.05. Rungs 4 and 5 are
+    scored too, but nothing is claimed for them.
 
 ### 2026-11-12, round 5
 - Rung 4: N-BEATS (4 blocks, width 64, lookback 30d, QLIKE loss, pooled across symbols).

@@ -19,7 +19,7 @@ Each rung has to beat the one before it, out of sample, against naive.
 | 1. Baselines | random walk (naive), historical mean, seasonal naive (1 day, 5-day mean) | done |
 | 2. Classical | seasonal EWMA, HAR-RV (+ intraday mix), ARMA on log RV, GARCH / GJR on de-seasonalized returns | done |
 | 3. ML | LightGBM on realized measures, range vol, ATR, Bollinger, RSI, volume, time of day | done (wins at 30 min, not at next session) |
-| 4. Deep / foundation | N-BEATS or PatchTST; zero-shot Chronos / TimesFM | not started |
+| 4. Deep / foundation | N-BEATS (two sizes); zero-shot Chronos | done (does not beat rung 3 at 30 min or rung 2 at next session) |
 | 5. Combinations | equal and QLIKE-optimized geometric blends of rungs 2-3 | done (no significant gain) |
 
 ## Layout
