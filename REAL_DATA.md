@@ -48,7 +48,13 @@ uv run forecasting run-all --data-root data/kite          # ~20-40 min
   Kite for 55-day chunks (Kite's limit for minute candles is 60), and resumes if
   interrupted. Use `--start 2024-11-01` for more history.
 * `run-all` checks the data, backtests every model on the development period,
-  simulates the paper trading, and writes `results/run_kite/REPORT.md`.
+  simulates the paper trading (daily intraday round trips, and a held basket that
+  is rebalanced only when needed), and writes `results/run_kite/REPORT.md`.
+* To rerun only the held basket, for example with another band or target:
+  `uv run forecasting papertrade-delivery --config forecasting/configs/rv_ladder.yaml
+  --data-root data/kite --results results/run_kite --band 0.5 --target-vol 0.12`.
+  Charges come from `forecasting/configs/costs_delivery.yaml`; check them against
+  Zerodha's charge list.
 * Since 3 Aug 2026 the candles stop at 15:14 instead of 15:29: continuous trading
   now ends at 15:15 (closing auction session). The run uses 09:15-15:15 for every
   session so all days are comparable; the data-quality section of the report says so.

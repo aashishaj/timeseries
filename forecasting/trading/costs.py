@@ -1,4 +1,5 @@
-"""Transaction costs for NSE equity intraday trades."""
+"""Transaction costs for NSE equity trades: intraday (MIS) by default, delivery (CNC)
+with ``configs/costs_delivery.yaml``."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ import numpy as np
 import yaml
 
 DEFAULT_COSTS = Path(__file__).resolve().parents[1] / "configs" / "costs.yaml"
+DELIVERY_COSTS = DEFAULT_COSTS.with_name("costs_delivery.yaml")
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,8 @@ class CostModel:
     stamp_buy_rate: float = 0.00003
     gst_rate: float = 0.18
     slippage_bps: float = 2.0
+    stt_buy_rate: float = 0.0  # delivery only: STT is charged on the buy side too
+    dp_sell_inr: float = 0.0  # delivery only: depository fee per stock sold per day
 
     @classmethod
     def from_yaml(cls, path: str | Path | None = None) -> CostModel:
@@ -34,7 +38,10 @@ class CostModel:
         exchange = self.exchange_rate * n
         sebi = self.sebi_rate * n
         gst = self.gst_rate * (brokerage + exchange + sebi)
-        tax = self.stamp_buy_rate * n if buy else self.stt_sell_rate * n
+        if buy:
+            tax = (self.stamp_buy_rate + self.stt_buy_rate) * n
+        else:
+            tax = self.stt_sell_rate * n + self.dp_sell_inr * (n > 0)
         slippage = self.slippage_bps * 1e-4 * n
         return brokerage + exchange + sebi + gst + tax + slippage
 

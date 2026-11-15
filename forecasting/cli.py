@@ -215,6 +215,52 @@ def cmd_papertrade(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_papertrade_delivery(args: argparse.Namespace) -> int:
+    """Held, volatility-managed basket (delivery) from next-session forecasts."""
+    from forecasting.trading.costs import DELIVERY_COSTS, CostModel
+    from forecasting.trading.vol_managed import VolManagedConfig, vol_managed_backtest
+
+    cfg = load_config(args.config, data_root=args.data_root)
+    parts, periods = [], {}
+    for folder in map(Path, args.results):
+        f = pd.read_parquet(folder / "forecasts.parquet")
+        f = f[f["horizon"] == args.horizon]
+        if args.model:
+            f = f[f["model"].isin(args.model)]
+        if f.empty:
+            raise SystemExit(f"no {args.horizon} forecasts in {folder}/forecasts.parquet")
+        days = sorted(f["session"].unique())
+        periods[f"{folder.name}: {days[0]} to {days[-1]}"] = days
+        parts.append(f)
+    forecasts = pd.concat(parts, ignore_index=True)
+    if forecasts.duplicated(["model", "session", "symbol"]).any():
+        raise SystemExit("the --results folders overlap: a session is forecast twice")
+    panel, _ = load_panel(cfg)
+    bands = args.band or [VolManagedConfig.band]
+    vm = VolManagedConfig(
+        target_annual_vol=args.target_vol,
+        capital_inr=args.capital,
+        max_gross=args.max_gross,
+        band=bands[0],
+    )
+    result = vol_managed_backtest(
+        panel,
+        forecasts,
+        vm,
+        CostModel.from_yaml(args.costs or DELIVERY_COSTS),
+        bands=bands if len(bands) > 1 else None,
+    )
+    if len(periods) > 1:
+        periods = {"all sessions": None, **periods}
+    md = result.to_markdown(periods if len(periods) > 1 else None)
+    print(md)
+    out = Path(args.out) if args.out else Path(args.results[-1]) / "paper_trading_delivery.md"
+    out.write_text(md + "\n")
+    result.daily.to_csv(out.with_suffix(".csv"))
+    log.info("delivery paper trading report written to %s", out)
+    return 0
+
+
 def cmd_run_all(args: argparse.Namespace) -> int:
     """Validate -> development backtest of every model -> paper trading -> REPORT.md."""
     from forecasting.backtest.evaluate import plain_accuracy
@@ -245,6 +291,20 @@ def cmd_run_all(args: argparse.Namespace) -> int:
             target_vol=0.15,
             capital=1_000_000.0,
             max_gross=2.0,
+            costs=None,
+            out=None,
+        )
+    )
+    cmd_papertrade_delivery(
+        argparse.Namespace(
+            **common,
+            results=[str(out)],
+            horizon="next_session",
+            model=None,
+            target_vol=0.10,
+            capital=1_000_000.0,
+            max_gross=1.0,
+            band=None,
             costs=None,
             out=None,
         )
@@ -296,7 +356,10 @@ def _run_report(name: str, root: Path, metrics, accuracy, out: Path) -> str:
                 f"{100 * a.within_25pct:.0f}% |"
             )
         lines.append("")
-    lines += [(out / "paper_trading.md").read_text(), "", (out / "data_quality.md").read_text()]
+    lines += [(out / "paper_trading.md").read_text(), ""]
+    if (out / "paper_trading_delivery.md").exists():
+        lines += [(out / "paper_trading_delivery.md").read_text(), ""]
+    lines += [(out / "data_quality.md").read_text()]
     return "\n".join(lines) + "\n"
 
 
@@ -385,6 +448,34 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--costs", default=None, help="cost YAML (default configs/costs.yaml)")
     p.add_argument("--out", default=None)
     p.set_defaults(func=cmd_papertrade)
+
+    p = sub.add_parser(
+        "papertrade-delivery",
+        help="simulate a held, volatility-managed basket (delivery) from backtest forecasts",
+    )
+    p.add_argument("--config", default=DEFAULT_EXPERIMENT)
+    p.add_argument("--data-root", default=None, help="overrides data.root in the config")
+    p.add_argument(
+        "--results",
+        action="append",
+        required=True,
+        help="backtest output dir (forecasts.parquet); repeat to run several periods on end",
+    )
+    p.add_argument("--horizon", default="next_session")
+    p.add_argument("--model", action="append", help="only these models (repeatable)")
+    p.add_argument("--target-vol", type=float, default=0.10, help="annualized, e.g. 0.10")
+    p.add_argument("--capital", type=float, default=1_000_000.0, help="INR")
+    p.add_argument("--max-gross", type=float, default=1.0, help="most that can be invested")
+    p.add_argument(
+        "--band",
+        type=float,
+        action="append",
+        help="trade a stock when its weight is this fraction away from target "
+        "(default 0.25); repeat to compare several bands",
+    )
+    p.add_argument("--costs", default=None, help="cost YAML (default configs/costs_delivery.yaml)")
+    p.add_argument("--out", default=None)
+    p.set_defaults(func=cmd_papertrade_delivery)
 
     p = sub.add_parser("run-all", help="data check + every model + paper trading + REPORT.md")
     p.add_argument("--config", default=str(DEFAULT_EXPERIMENT.parent / "rv_ladder.yaml"))

@@ -42,6 +42,33 @@ opened once after the final set was written down.
 * Details: [development](results/run_kite/REPORT.md),
   [lockbox](results/lockbox_kite/results.md), [log](PROGRESS.md).
 
+### Using the forecasts: a held basket
+
+`forecasting papertrade-delivery` holds the ten stocks overnight, sizes them with the
+next-session forecasts toward 10% volatility a year (never more than fully invested),
+and trades a stock only when its weight is more than 25% away from its target. With
+`arma_logrv_mix`, simulated with Zerodha delivery charges:
+
+| period | charges a year | realized vol (target 10%) | return a year | buy and hold: return, vol |
+|---|---|---|---|---|
+| development, 148 sessions | 1.0% | 10.6% | -17.7% | -21.1%, 15.0% |
+| last 40 sessions | 1.0% | 11.7% | +44.8% | +67.5%, 15.1% |
+| all 188 sessions | 1.0% | 11.0% | -4.4% | -2.2%, 15.2% |
+
+* The cost problem is gone: about 1% a year (0.4% with a 50% band and about 3 orders
+  a month) against 26% for the intraday version. Both checks written down before the
+  last 40 sessions were run passed (charges under 2% a year, volatility within 0.7 to
+  1.3 of the target).
+* It is still a long-only basket. It earns what these stocks earn, scaled by how much
+  is invested (about three quarters on average), and over these 188 sessions that was
+  slightly negative. Volatility forecasts do not say which way prices go.
+* Whether the forecasts beat a fixed position of the same size is open. In
+  development they did (volatility 10.6% against 12.1% for sizing by long-run average
+  volatility, worst day -2.2% against -2.8%); on the last 40 sessions they did not
+  (11.7% against 11.5%).
+* Details: [all models and periods](results/lockbox_kite/paper_trading_delivery.md),
+  [band comparison](results/run_kite/paper_trading_delivery_bands.md).
+
 ## Layout
 
 ```

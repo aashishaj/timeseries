@@ -25,6 +25,8 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
       results in `results/run_kite/REPORT.md`.
 - [x] Lockbox (opened once, 2026-11-15, at commit 2bc461f): both claims confirmed on
       real data. `lgbm` at 30 min, `arma_logrv_mix` at next session.
+- [x] Held, volatility-managed basket with banded rebalancing (2026-11-16): charges
+      about 1% a year instead of 26%; risk near target; no profit from it.
 
 ## Blockers / needs from the owner
 
@@ -32,6 +34,66 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
   is only needed again before downloading new candles.
 
 ## Log
+
+### 2026-11-16, round 8: a held basket instead of daily round trips
+- New `forecasting papertrade-delivery` (`forecasting/trading/vol_managed.py`): the
+  stocks are held overnight (delivery), sized by the next-session forecasts, and a
+  stock is traded only when its weight is more than a band away from its target.
+  - Forecast intraday RV -> close-to-close volatility with each stock's past ratio of
+    close-to-close variance to intraday RV (about 1.1 to 1.8 here).
+  - Inverse-volatility weights; basket volatility from those volatilities and the
+    correlation of the last 60 sessions (shrunk halfway to its average); scaled to a
+    10% a year target; never more than 1x invested, the rest in cash at 0%.
+  - Whole shares, trades at the session's first price, Zerodha delivery charges
+    (`configs/costs_delivery.yaml`: no brokerage, STT 0.1% each side, stamp duty
+    0.015%, Rs 15.34 depository charge per stock sold) + 2 bps slippage per side.
+  - Kite prices are split-adjusted: the largest overnight move in the year is 9%.
+- **Development sessions** (148, 2026-02-06 -> 2026-09-11; the basket fell about 21%
+  a year annualized over them). `results/run_kite/paper_trading_delivery.md`:
+  - Costs: `arma_logrv_mix` with the 25% band trades 4.8x capital a year, about 18
+    orders a month, for 1.0% a year in charges. The intraday version paid 26.6%.
+  - Risk: realized volatility 10.6% against the 10% target; std of return / forecast
+    volatility 1.12.
+  - What the forecasts add: `hist_mean` (long-run average volatility, so an almost
+    constant position) was invested the same on average (0.74 vs 0.73) but ran at
+    12.1% volatility, worst day -2.8% (arma -2.2%), max drawdown -14.6% (arma
+    -12.3%). The forecasts cost 0.7% a year more in charges.
+  - Returns: all negative because the market fell. Sharpe is no better than buy and
+    hold (-1.67 vs -1.40). There is no evidence here that sizing by volatility earns
+    more; it only steadies the risk.
+  - Band (`paper_trading_delivery_bands.md`, arma): 0% -> 3.9% a year in costs, 10% ->
+    2.2%, 25% -> 1.0%, 50% -> 0.5%, with realized volatility between 10.4% and 10.9%
+    for all four. Default 25%; 50% is the low-effort option (3 orders a month).
+  - `nbeats_deep` has no forecast for its first 20 sessions and sat in cash while the
+    market fell; its smaller loss is that, not skill. The report now flags it.
+- **Check on the 40 lockbox sessions, fixed before running it.** These sessions were
+  not used to design the strategy (the intraday version's results on them are known).
+  The basket is run straight through from the development sessions, positions carried
+  over. Model `arma_logrv_mix`, 10% target, 1x cap, 25% band; the 50% band and
+  `hist_mean` are reported next to it. Pass if, over those 40 sessions:
+  1. charges are below 2% a year, and
+  2. realized volatility is within 0.7 to 1.3 x the target (40 sessions pin a
+     volatility down to about +-11%, one standard error).
+  Nothing is claimed about returns: 40 sessions cannot show them.
+- **Result on those 40 sessions** (2026-09-15 -> 2026-11-12; the basket rose about 11%
+  in them). `results/lockbox_kite/paper_trading_delivery.md`:
+  - Check 1 passed: charges 0.98% a year (5.5x turnover, about 20 orders a month).
+  - Check 2 passed: realized volatility 11.7%, 1.17 x the target.
+  - 50% band: charges 0.07% a year, volatility 10.6%, about 1 order a month.
+  - Not repeated: the gain over `hist_mean`. On these sessions `hist_mean` ran at 11.5%
+    volatility with 0.73 invested, arma at 11.7% with 0.76. So whether the forecasts
+    beat a fixed position of the same size is open (yes on 148 sessions, no on 40).
+  - Returns, for the record only: arma +44.8% a year annualized, buy and hold +67.5%.
+- All 188 sessions: arma -4.4% a year at 11.0% volatility, max drawdown -14.6%; buy
+  and hold -2.2% at 15.2%, max drawdown -16.8%. The basket is long only, about three
+  quarters invested, and earns what the stocks earn. The forecasts fix the cost
+  problem and hold risk near a chosen level; they are not a source of profit.
+- Realized volatility runs 6-17% above target and std of return / forecast volatility
+  is about 1.1: days with large overnight gaps are fatter-tailed than the forecasts
+  imply, and correlations on those days are higher than the trailing estimate.
+- Open: earning from a volatility forecast needs an instrument that pays on
+  volatility (options against implied volatility). That needs option-chain history,
+  which the Kite historical API does not keep for expired contracts.
 
 ### 2026-11-15, round 7: lockbox
 - Opened once, with the code and final set of commit 2bc461f: 40 sessions

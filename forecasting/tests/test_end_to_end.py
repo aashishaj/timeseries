@@ -99,4 +99,6 @@ def test_run_all_writes_one_report(tmp_path, synthetic_export):
     report = (out / "REPORT.md").read_text()
     assert "## 30min" in report and "## next_session" in report
     assert "Paper trading" in report and "Data quality" in report
+    assert "held basket" in report and "buy_hold" in report
+    assert (out / "paper_trading_delivery.csv").exists()
     assert "explained" in report and "lockbox" in report
