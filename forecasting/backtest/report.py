@@ -39,7 +39,7 @@ def summary_markdown(evaluation: Evaluation, horizons: dict[str, Horizon]) -> st
     out = []
     for hname, table in evaluation.summary.groupby("horizon", sort=False):
         h = horizons.get(hname)
-        best = table["QLIKE"].idxmin()
+        best = table["QLIKE"].idxmin() if table["QLIKE"].notna().any() else None
         first = table.iloc[0]
         desc = ""
         if h is not None:

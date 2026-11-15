@@ -2,7 +2,10 @@
 
 Fairness rules:
 * every model is scored on exactly the same (origin, symbol) pairs: those where the
-  target is observed and positive and *every* model produced a finite forecast;
+  target is observed and positive and *every scored* model produced a finite forecast;
+* a model that forecasts less than ``min_coverage`` of the valid targets (e.g. a model
+  whose optional dependency is missing) is not scored: it would otherwise shrink the
+  common sample for everyone. It stays in the summary with its coverage and NaN metrics;
 * every metric is also reported relative to the baseline (naive by default);
 * significance uses a Diebold-Mariano test on the per-origin cross-sectional mean
   loss differential, with Newey-West errors (lag >= target-window overlap).
@@ -12,6 +15,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+import logging
 
 import numpy as np
 import pandas as pd
@@ -24,6 +29,28 @@ from forecasting.backtest.metrics import (
     qlike,
     squared_error,
 )
+
+log = logging.getLogger(__name__)
+
+MIN_COVERAGE = 0.5
+
+
+def _scored_models(
+    yhat: pd.DataFrame, target_ok: pd.Series, baseline: str | None, min_coverage: float, hname
+) -> tuple[list[str], dict[str, float]]:
+    """Models with enough finite forecasts to join the common sample, and every coverage."""
+    coverage = {
+        m: float(np.isfinite(yhat[m][target_ok]).mean()) if target_ok.any() else 0.0
+        for m in yhat.columns
+    }
+    scored = [m for m in yhat.columns if coverage[m] >= min_coverage or m == baseline]
+    for m in yhat.columns:
+        if m not in scored:
+            log.warning(
+                "%s / %s: forecasts only %.0f%% of targets (< %.0f%%); left out of scoring",
+                m, hname, 100 * coverage[m], 100 * min_coverage,
+            )
+    return scored, coverage
 
 
 @dataclass
@@ -39,6 +66,7 @@ def evaluate(
     horizons: Mapping[str, Horizon] | None = None,
     rungs: Mapping[str, int] | None = None,
     floor_rel: float = 1e-6,
+    min_coverage: float = MIN_COVERAGE,
 ) -> Evaluation:
     """Evaluate the output of :func:`run_walk_forward` for one or more models/horizons.
 
@@ -50,6 +78,8 @@ def evaluate(
             best (lowest QLIKE) model of all lower rungs on the same sample.
         floor_rel: forecasts below ``floor_rel * median(y)`` are floored before QLIKE
             (a zero variance forecast has infinite QLIKE); the count is reported.
+        min_coverage: models forecasting less than this share of valid targets are
+            reported but not scored, and do not shrink the common sample.
     """
     horizons = dict(horizons or {})
     summaries, per_symbol = [], []
@@ -66,7 +96,11 @@ def evaluate(
             raise ValueError(f"models disagree on targets for horizon {hname}")
         n_total = len(y)
         target_ok = np.isfinite(y) & (y > 0)
-        mask = target_ok & np.isfinite(yhat).all(axis=1)
+        all_models = models
+        models, coverage = _scored_models(yhat, target_ok, baseline, min_coverage, hname)
+        mask = target_ok & np.isfinite(yhat[models]).all(axis=1)
+        if not mask.any():
+            raise ValueError(f"no (origin, symbol) pair has a forecast from every model for {hname}")
         yv = y[mask].to_numpy()
         floor = floor_rel * float(np.median(yv)) if len(yv) else 0.0
         origins = y.index.get_level_values("origin_ts")[mask]
@@ -83,7 +117,7 @@ def evaluate(
                 "se": squared_error(yv, fc),
                 "ae": absolute_error(yv, fc),
                 "floored": int((raw < floor).sum()),
-                "coverage": float(np.isfinite(yhat[m][target_ok]).mean()),
+                "coverage": coverage[m],
             }
         base = losses[baseline]
         base_ps = _per_symbol_means(base, symbols)
@@ -91,6 +125,7 @@ def evaluate(
 
         mean_qlike = {m: float(losses[m]["qlike"].mean()) for m in models}
         rung_of = {m: (rungs or {}).get(m) for m in models}
+        rung_of_all = {m: (rungs or {}).get(m) for m in all_models}
         for m in models:
             lm = losses[m]
             if m == baseline:
@@ -138,6 +173,20 @@ def evaluate(
                 MSE_vs_naive=ps["se"] / base_ps["se"],
             )
             per_symbol.append(ps.reset_index())
+        for m in all_models:
+            if m not in models:
+                summaries.append(
+                    {
+                        "horizon": hname,
+                        "model": m,
+                        "n_obs": 0,
+                        "n_origins": 0,
+                        "rung": rung_of_all.get(m),
+                        "coverage": coverage[m],
+                        "QLIKE": np.nan,
+                        "excluded_obs": int(n_total),
+                    }
+                )
     summary = pd.DataFrame(summaries)
     per_sym = pd.concat(per_symbol, ignore_index=True).rename(
         columns={"qlike": "QLIKE", "se": "MSE", "ae": "MAE"}
@@ -165,7 +214,7 @@ def _per_symbol_means(losses: dict, symbols: pd.Index) -> pd.DataFrame:
     return out
 
 
-def plain_accuracy(forecasts: pd.DataFrame) -> pd.DataFrame:
+def plain_accuracy(forecasts: pd.DataFrame, min_coverage: float = MIN_COVERAGE) -> pd.DataFrame:
     """Easy-to-read accuracy per (horizon, model) on the common sample:
 
     * ``explained``: R^2 between log forecast and log realized variance;
@@ -174,10 +223,18 @@ def plain_accuracy(forecasts: pd.DataFrame) -> pd.DataFrame:
     """
     rows = []
     for hname, f in forecasts.groupby("horizon", sort=False):
-        wide = f.pivot_table(index=["origin_ts", "symbol"], columns="model", values="yhat")
+        wide = f.pivot_table(
+            index=["origin_ts", "symbol"], columns="model", values="yhat", dropna=False
+        )[list(dict.fromkeys(f["model"]))]
         y = f.groupby(["origin_ts", "symbol"])["y"].first().reindex(wide.index)
-        ok = np.isfinite(y) & (y > 0) & (wide > 0).all(axis=1)
-        for m in dict.fromkeys(f["model"]):
+        target_ok = np.isfinite(y) & (y > 0)
+        scored, _ = _scored_models(wide, target_ok, None, min_coverage, hname)
+        ok = target_ok & (wide[scored] > 0).all(axis=1)
+        for m in wide.columns:
+            if m not in scored:
+                rows.append({"horizon": hname, "model": m, "explained": np.nan,
+                             "median_vol_error": np.nan, "within_25pct": np.nan})
+                continue
             fc, yy = wide.loc[ok, m].to_numpy(), y[ok].to_numpy()
             err = np.abs(np.sqrt(fc / yy) - 1)
             rows.append(

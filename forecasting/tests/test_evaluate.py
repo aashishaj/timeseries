@@ -62,3 +62,18 @@ def test_each_rung_is_compared_to_best_of_all_lower_rungs():
     assert s.loc["good", "DM_p_vs_lower_rungs"] < 0.05
     assert s.loc["bad", "best_lower_rung"] == "naive"
     assert pd.isna(s.loc["naive", "best_lower_rung"])
+
+
+def test_model_without_forecasts_is_reported_but_does_not_empty_the_sample():
+    from forecasting.backtest.evaluate import plain_accuracy
+
+    f = _forecasts(n=50)
+    full = evaluate(f).summary.set_index("model")
+    f.loc[f["model"] == "bad", "yhat"] = np.nan  # e.g. an optional dependency is missing
+    ev = evaluate(f)
+    s = ev.summary.set_index("model")
+    assert s.loc["good", "n_obs"] == full.loc["good", "n_obs"] == 100
+    assert s.loc["good", "QLIKE"] == pytest.approx(full.loc["good", "QLIKE"])
+    assert s.loc["bad", "coverage"] == 0 and np.isnan(s.loc["bad", "QLIKE"])
+    acc = plain_accuracy(f).set_index("model")
+    assert np.isfinite(acc.loc["good", "explained"]) and np.isnan(acc.loc["bad", "explained"])

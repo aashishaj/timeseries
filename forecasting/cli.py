@@ -277,6 +277,12 @@ def _run_report(name: str, root: Path, metrics, accuracy, out: Path) -> str:
                 else "-"
             )
             a = acc.loc[r.model]
+            if pd.isna(r.QLIKE_vs_naive):
+                lines.append(
+                    f"| {r.model} | {r.rung if pd.notna(r.rung) else '-'} | not scored: "
+                    f"forecasts only {100 * r.coverage:.0f}% of targets | - | - | - | - |"
+                )
+                continue
             lines.append(
                 f"| {r.model} | {r.rung if pd.notna(r.rung) else '-'} | {r.QLIKE_vs_naive:.3f} | "
                 f"{vs} | {100 * a.explained:.0f}% | {100 * a.median_vol_error:.0f}% | "

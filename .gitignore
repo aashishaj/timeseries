@@ -14,3 +14,6 @@ build/
 # run outputs: keep the markdown summaries, ignore bulky artifacts
 results/**/forecasts.parquet
 results/ci/
+
+# per-run console logs
+results/**/run.log

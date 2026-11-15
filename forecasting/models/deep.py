@@ -24,6 +24,7 @@ picklable with the 'spawn' start method.
 from __future__ import annotations
 
 import os
+import logging
 import concurrent.futures as cf
 import multiprocessing as mp
 from typing import Self
@@ -34,6 +35,8 @@ import pandas as pd
 from forecasting.models.common import daily_rv, seasonal_profile
 from forecasting.models.classical import DailyComponentModel
 from forecasting.data.panel import n_symbols, panel_symbols
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +256,8 @@ class NBEATSRVModel(DailyComponentModel):
                 self.lookback_days, self.n_blocks, self.width,
                 self.n_epochs, self.lr, self.batch_size, self.seed,
             ).result()
-        except Exception:
+        except Exception as exc:
+            log.warning("%s: N-BEATS training failed (%s); no forecasts this fold", self.name, exc)
             self.state_dict_ = None
 
     def _forecast_daily(self, rv: np.ndarray) -> np.ndarray:
@@ -343,6 +347,11 @@ class ChronosRVModel(DailyComponentModel):
             ).result()
             for k, j in enumerate(valid_idx):
                 out[j] = float(np.exp(medians[k]))
-        except Exception:
-            pass
+        except Exception as exc:
+            if not getattr(self, "_warned", False):
+                log.warning(
+                    "%s: Chronos unavailable (%s: %s); install with "
+                    "`uv sync --extra foundation`", self.name, type(exc).__name__, exc,
+                )
+                self._warned = True
         return out

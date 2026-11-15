@@ -1,0 +1,16 @@
+{
+  "experiment": "rv_ladder",
+  "data": "synthetic (data/synthetic)",
+  "split": "dev: scored sessions 2025-03-27 -> 2025-11-03; last 40 sessions held out",
+  "symbols": "RELIANCE, HDFCBANK, ICICIBANK, INFY, TCS, BHARTIARTL, SBIN, ITC, LT, KOTAKBANK",
+  "models": "naive = random_walk; arma_logrv_mix = arma_logrv, intraday_beta=0.5, order=[1, 1]; lgbm = lightgbm; nbeats = nbeats, intraday_beta=0.5, lookback_days=30, n_blocks=4, n_epochs=100, width=64",
+  "git": "9185f19-dirty",
+  "walk_forward": {
+    "initial_train_sessions": 60,
+    "test_block_sessions": 5,
+    "window": "expanding",
+    "rolling_train_sessions": null,
+    "max_folds": null,
+    "holdout_sessions": 40
+  }
+}
