@@ -57,6 +57,7 @@ def _get_torch_pool() -> cf.ProcessPoolExecutor:
 # Module-level worker functions (must be top-level to be picklable with spawn)
 # ---------------------------------------------------------------------------
 
+
 def _nbeats_train_job(
     x: np.ndarray,
     y: np.ndarray,
@@ -70,6 +71,7 @@ def _nbeats_train_job(
 ) -> dict[str, np.ndarray]:
     """Train N-BEATS in the subprocess; returns state dict as numpy arrays."""
     import os as _os
+
     _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     import numpy as _np
     import torch
@@ -79,8 +81,10 @@ def _nbeats_train_job(
         def __init__(self) -> None:
             super().__init__()
             self.fc = nn.Sequential(
-                nn.Linear(lookback, width), nn.ReLU(),
-                nn.Linear(width, width), nn.ReLU(),
+                nn.Linear(lookback, width),
+                nn.ReLU(),
+                nn.Linear(width, width),
+                nn.ReLU(),
             )
             self.bc = nn.Linear(width, lookback)
             self.fo = nn.Linear(width, 1)
@@ -131,6 +135,7 @@ def _nbeats_predict_job(
 ) -> np.ndarray:
     """Run N-BEATS inference in the subprocess; returns predictions as numpy."""
     import os as _os
+
     _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     import torch
     import torch.nn as nn
@@ -139,8 +144,10 @@ def _nbeats_predict_job(
         def __init__(self) -> None:
             super().__init__()
             self.fc = nn.Sequential(
-                nn.Linear(lookback, width), nn.ReLU(),
-                nn.Linear(width, width), nn.ReLU(),
+                nn.Linear(lookback, width),
+                nn.ReLU(),
+                nn.Linear(width, width),
+                nn.ReLU(),
             )
             self.bc = nn.Linear(width, lookback)
             self.fo = nn.Linear(width, 1)
@@ -181,6 +188,7 @@ def _chronos_predict_job(
 ) -> np.ndarray:
     """Run Chronos inference in the subprocess; returns medians as numpy."""
     import os as _os
+
     _os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     import torch
     from chronos import BaseChronosPipeline
@@ -201,6 +209,7 @@ def _chronos_predict_job(
 # ---------------------------------------------------------------------------
 # N-BEATS model
 # ---------------------------------------------------------------------------
+
 
 class NBEATSRVModel(DailyComponentModel):
     """N-BEATS (Oreshkin et al. 2020) on log daily RV, pooled across symbols.
@@ -258,18 +267,30 @@ class NBEATSRVModel(DailyComponentModel):
         x_arr = np.array(windows_x, dtype=np.float32)
         y_arr = np.array(windows_y, dtype=np.float32)
         try:
-            self.state_dict_ = _get_torch_pool().submit(
-                _nbeats_train_job,
-                x_arr, y_arr,
-                self.lookback_days, self.n_blocks, self.width,
-                self.n_epochs, self.lr, self.batch_size, self.seed,
-            ).result()
+            self.state_dict_ = (
+                _get_torch_pool()
+                .submit(
+                    _nbeats_train_job,
+                    x_arr,
+                    y_arr,
+                    self.lookback_days,
+                    self.n_blocks,
+                    self.width,
+                    self.n_epochs,
+                    self.lr,
+                    self.batch_size,
+                    self.seed,
+                )
+                .result()
+            )
         except Exception as exc:
             if self.name not in _WARNED:
                 _WARNED.add(self.name)
                 log.warning(
                     "%s: N-BEATS training failed (%s: %s); no forecasts from it",
-                    self.name, type(exc).__name__, exc,
+                    self.name,
+                    type(exc).__name__,
+                    exc,
                 )
             self.state_dict_ = None
 
@@ -288,11 +309,21 @@ class NBEATSRVModel(DailyComponentModel):
             seq_filled = np.where(np.isfinite(seq), seq, mu)
             x_norm = (seq_filled - mu).reshape(1, -1).astype(np.float32)
             try:
-                log_fc = float(_get_torch_pool().submit(
-                    _nbeats_predict_job,
-                    x_norm, self.state_dict_,
-                    self.lookback_days, self.n_blocks, self.width,
-                ).result()[0]) + mu
+                log_fc = (
+                    float(
+                        _get_torch_pool()
+                        .submit(
+                            _nbeats_predict_job,
+                            x_norm,
+                            self.state_dict_,
+                            self.lookback_days,
+                            self.n_blocks,
+                            self.width,
+                        )
+                        .result()[0]
+                    )
+                    + mu
+                )
                 out[j] = np.exp(log_fc)
             except Exception:
                 pass
@@ -302,6 +333,7 @@ class NBEATSRVModel(DailyComponentModel):
 # ---------------------------------------------------------------------------
 # Chronos (zero-shot foundation model)
 # ---------------------------------------------------------------------------
+
 
 class ChronosRVModel(DailyComponentModel):
     """Zero-shot Chronos-T5 on log daily RV.
@@ -355,9 +387,11 @@ class ChronosRVModel(DailyComponentModel):
         if not contexts:
             return out
         try:
-            medians = _get_torch_pool().submit(
-                _chronos_predict_job, contexts, self.model_id, self.num_samples
-            ).result()
+            medians = (
+                _get_torch_pool()
+                .submit(_chronos_predict_job, contexts, self.model_id, self.num_samples)
+                .result()
+            )
             for k, j in enumerate(valid_idx):
                 out[j] = float(np.exp(medians[k]))
         except Exception as exc:
@@ -366,6 +400,8 @@ class ChronosRVModel(DailyComponentModel):
                 log.warning(
                     "%s: Chronos unavailable (%s: %s); install with "
                     "`uv sync --extra kite --extra deep --extra foundation`",
-                    self.name, type(exc).__name__, exc,
+                    self.name,
+                    type(exc).__name__,
+                    exc,
                 )
         return out

@@ -86,9 +86,7 @@ def test_nbeats_ignores_the_future(panel):
 
     h = Horizon("h", B, "session_open")
     wf = WalkForward(initial_train_sessions=26, test_block_sessions=4)
-    model = NBEATSRVModel(
-        lookback_days=5, n_blocks=2, width=16, n_epochs=3, min_train_windows=5
-    )
+    model = NBEATSRVModel(lookback_days=5, n_blocks=2, width=16, n_epochs=3, min_train_windows=5)
     cut = panel["ts"].iloc[33 * B * 2]
     poisoned = panel.copy()
     future = (poisoned["ts"] >= cut).to_numpy()

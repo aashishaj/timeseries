@@ -188,9 +188,7 @@ class NSECalendar:
         return pd.Timestamp(dt.datetime.combine(to_date(day), self.open_time), tz=self.tz)
 
     def session_close(self, day) -> pd.Timestamp:
-        return pd.Timestamp(
-            dt.datetime.combine(to_date(day), self.close_time_on(day)), tz=self.tz
-        )
+        return pd.Timestamp(dt.datetime.combine(to_date(day), self.close_time_on(day)), tz=self.tz)
 
     def bar_starts(self, day, bar_minutes: int) -> pd.DatetimeIndex:
         """Start timestamps of every bar in a session, e.g. 09:15, 09:20, ..., 15:25."""

@@ -48,7 +48,10 @@ def _scored_models(
         if m not in scored:
             log.warning(
                 "%s / %s: forecasts only %.0f%% of targets (< %.0f%%); left out of scoring",
-                m, hname, 100 * coverage[m], 100 * min_coverage,
+                m,
+                hname,
+                100 * coverage[m],
+                100 * min_coverage,
             )
     return scored, coverage
 
@@ -238,8 +241,15 @@ def plain_accuracy(forecasts: pd.DataFrame, min_coverage: float = MIN_COVERAGE) 
         ok = target_ok & (wide[scored] > 0).all(axis=1)
         for m in wide.columns:
             if m not in scored:
-                rows.append({"horizon": hname, "model": m, "explained": np.nan,
-                             "median_vol_error": np.nan, "within_25pct": np.nan})
+                rows.append(
+                    {
+                        "horizon": hname,
+                        "model": m,
+                        "explained": np.nan,
+                        "median_vol_error": np.nan,
+                        "within_25pct": np.nan,
+                    }
+                )
                 continue
             fc, yy = wide.loc[ok, m].to_numpy(), y[ok].to_numpy()
             err = np.abs(np.sqrt(fc / yy) - 1)
