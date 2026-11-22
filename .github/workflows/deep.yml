@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 45
     env:
       HF_HOME: ${{ github.workspace }}/.hf-cache  # Chronos weights (~32 MB), cached below
+      PYTHONUNBUFFERED: "1"  # show output as it happens
+      PYTHONFAULTHANDLER: "1"  # on SIGABRT, print where every thread is
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3  # no major tags since v8: pin the exact release
@@ -43,12 +45,29 @@ jobs:
           uv run --frozen pytest -q -rs | tee pytest.log
           if grep -q "SKIPPED" pytest.log; then echo "::error::tests were skipped"; exit 1; fi
       - name: Synthetic backtest with lightgbm and rung 4 together
+        timeout-minutes: 20  # ~30 s on an M-series Mac
         run: |
           uv run --frozen forecasting synth --out data/synthetic
-          uv run --frozen forecasting backtest --config forecasting/configs/rv_ladder.yaml \
+          # Run the installed script directly (not via `uv run`) so $! is the Python
+          # process. If it is still going after 10 minutes, SIGABRT makes faulthandler
+          # print every thread's stack, in it and in the torch worker, then it stops.
+          .venv/bin/forecasting -v backtest --config forecasting/configs/rv_ladder.yaml \
             --data-root data/synthetic --out results/ci-deep --leaderboard "" --max-folds 3 \
             --model naive --model lgbm --model nbeats --model chronos_tiny \
-            --title "CI: rung 4 on synthetic data (pipeline check, not market evidence)"
+            --title "CI: rung 4 on synthetic data (pipeline check, not market evidence)" &
+          pid=$!
+          ( sleep 600
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "::error::backtest still running after 10 minutes; stacks follow"
+              pkill -ABRT -f "multiprocessing.spawn" || true
+              kill -ABRT "$pid" || true
+            fi ) &
+          watcher=$!
+          status=0
+          wait "$pid" || status=$?
+          pkill -P "$watcher" 2>/dev/null || true  # stop the timer so the step can end
+          kill "$watcher" 2>/dev/null || true
+          exit "$status"
       - name: Every model produced forecasts
         run: uv run --frozen python forecasting/tests/check_scored.py results/ci-deep/metrics.csv
       - name: Publish results table to the run summary
