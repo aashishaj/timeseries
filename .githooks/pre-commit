@@ -1,0 +1,38 @@
+#!/bin/sh
+# Runs the same lint checks as the online build (.github/workflows/ci.yml) before
+# every commit, so a formatting slip is caught here instead of turning the build red.
+#
+# Turn it on once per clone:   git config core.hooksPath .githooks
+# Skip it for one commit:      git commit --no-verify
+#
+# Checks the files as they are on disk (the whole project, like the online build),
+# and only when the commit includes Python files.
+
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -q '\.py$'; then
+  exit 0
+fi
+
+# Git started from an app may not have uv on its PATH: try the usual install places.
+UV=$(command -v uv 2>/dev/null)
+for candidate in "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv" /opt/homebrew/bin/uv /usr/local/bin/uv; do
+  [ -n "$UV" ] && break
+  [ -x "$candidate" ] && UV=$candidate
+done
+if [ -z "$UV" ]; then
+  echo "pre-commit: uv not found, lint not checked (the online build still checks it)" >&2
+  exit 0
+fi
+
+failed=0
+"$UV" run --frozen ruff check . || failed=1
+"$UV" run --frozen ruff format --check . || failed=1
+if [ "$failed" -ne 0 ]; then
+  cat >&2 <<'MSG'
+
+pre-commit: lint failed, so the online build would fail too. Commit stopped.
+  fix formatting:  uv run ruff format .
+  fix lint:        uv run ruff check --fix .
+then stage the changes and commit again.
+MSG
+  exit 1
+fi

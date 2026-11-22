@@ -94,6 +94,7 @@ Needs [uv](https://docs.astral.sh/uv/) and Python 3.11+.
 
 ```bash
 uv sync                                   # create .venv and install
+git config core.hooksPath .githooks       # once per clone: lint before every commit
 uv run pytest                             # tests, including leakage tests
 
 # try everything on synthetic data first
@@ -234,3 +235,14 @@ Every push runs the GitHub Actions workflow in `.github/workflows/ci.yml`: lint,
 full test suite and a synthetic end-to-end backtest. To see it, open the repo in the
 GitHub app or on github.com, go to **Actions**, and open the latest run. A green tick
 means everything passed, and the run's **Summary** page shows the results table.
+
+That build does not install torch, so the rung 4 tests (N-BEATS, Chronos) are skipped
+in it. A second workflow, `.github/workflows/deep.yml` ("deep-models"), installs torch
+and Chronos and runs everything on macOS, where lightgbm and torch can clash. It runs
+every Monday, on pushes that change the models or dependencies, and by hand (**Actions**
+-> **deep-models** -> **Run workflow**). It fails if any test is skipped or any model
+produces no forecasts.
+
+The same lint checks run before every commit once the hook is on
+(`git config core.hooksPath .githooks`, once per clone). It stops a commit that the
+online build would reject for formatting; `uv run ruff format .` fixes most of those.

@@ -1,0 +1,62 @@
+name: deep-models
+
+# Rung 4 (N-BEATS, Chronos) needs torch, which the main `ci` workflow does not install,
+# so its tests are skipped there. This job installs it and runs on macOS, because the
+# lightgbm + torch OpenMP clash (fixed by running torch in a subprocess) only shows
+# up on macOS. It is slower than `ci`, so it runs weekly, by hand, and on pushes that
+# touch the models or the dependencies.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * 1"  # Mondays 03:30 UTC (09:00 IST)
+  push:
+    paths:
+      - "forecasting/models/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deep.yml"
+
+jobs:
+  deep-macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-cache  # Chronos weights (~32 MB), cached below
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3  # no major tags since v8: pin the exact release
+        with:
+          enable-cache: true
+      - name: OpenMP for lightgbm
+        run: brew list libomp >/dev/null 2>&1 || brew install libomp
+      - uses: actions/cache@v6
+        with:
+          path: .hf-cache
+          key: hf-amazon-chronos-t5-tiny
+      - name: Install, with torch and Chronos
+        run: uv sync --frozen --extra deep --extra foundation
+      - name: Rung 4 libraries import (otherwise its tests would be skipped)
+        run: uv run --frozen python -c "import torch, chronos; print('torch', torch.__version__)"
+      - name: Tests (lightgbm and torch in one process, nothing skipped)
+        run: |
+          set -o pipefail  # keep pytest's exit code through tee
+          uv run --frozen pytest -q -rs | tee pytest.log
+          if grep -q "SKIPPED" pytest.log; then echo "::error::tests were skipped"; exit 1; fi
+      - name: Synthetic backtest with lightgbm and rung 4 together
+        run: |
+          uv run --frozen forecasting synth --out data/synthetic
+          uv run --frozen forecasting backtest --config forecasting/configs/rv_ladder.yaml \
+            --data-root data/synthetic --out results/ci-deep --leaderboard "" --max-folds 3 \
+            --model naive --model lgbm --model nbeats --model chronos_tiny \
+            --title "CI: rung 4 on synthetic data (pipeline check, not market evidence)"
+      - name: Every model produced forecasts
+        run: uv run --frozen python forecasting/tests/check_scored.py results/ci-deep/metrics.csv
+      - name: Publish results table to the run summary
+        if: always()
+        run: |
+          if [ -f results/ci-deep/results.md ]; then cat results/ci-deep/results.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: deep-results
+          path: results/ci-deep/

@@ -17,3 +17,6 @@ results/ci/
 
 # per-run console logs
 results/**/run.log
+
+# coverage runs
+.coverage
