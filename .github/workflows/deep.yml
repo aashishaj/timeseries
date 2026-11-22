@@ -44,25 +44,12 @@ jobs:
           set -o pipefail  # keep pytest's exit code through tee
           uv run --frozen pytest -q -rs | tee pytest.log
           if grep -q "SKIPPED" pytest.log; then echo "::error::tests were skipped"; exit 1; fi
-      - name: "Diagnose: which commands fail to exit (temporary)"
-        # On this runner `forecasting synth` finished its work and then never exited.
-        # Each command below adds one piece; run_limited.sh prints native and Python
-        # stacks of anything still running at its limit, then stops it.
-        timeout-minutes: 20
-        run: |
-          L=.github/scripts/run_limited.sh
-          $L 120 .venv/bin/python -c "import pyarrow.parquet" || true
-          $L 120 .venv/bin/python -c "import forecasting.cli" || true
-          $L 120 .venv/bin/forecasting synth --n-symbols 1 --start 2025-01-01 \
-            --end 2025-01-31 --out "$RUNNER_TEMP/syn-small" || true
-          $L 180 .venv/bin/forecasting synth --out data/synthetic || true
-          $L 180 uv run --frozen forecasting synth --out "$RUNNER_TEMP/syn-uv" || true
+      - name: Synthetic data (must exit; it deadlocked here once on Python 3.15)
+        timeout-minutes: 10
+        run: .github/scripts/run_limited.sh 180 .venv/bin/forecasting synth --out data/synthetic
       - name: Synthetic backtest with lightgbm and rung 4 together
         timeout-minutes: 20  # ~30 s on an M-series Mac
         run: |
-          if [ ! -d data/synthetic ]; then
-            .github/scripts/run_limited.sh 300 .venv/bin/forecasting synth --out data/synthetic || true
-          fi
           .github/scripts/run_limited.sh 600 .venv/bin/forecasting -v backtest \
             --config forecasting/configs/rv_ladder.yaml --data-root data/synthetic \
             --out results/ci-deep --leaderboard "" --max-folds 3 \
