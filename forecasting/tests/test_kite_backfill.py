@@ -238,3 +238,64 @@ def test_remember_secret_asks_only_once(tmp_path, monkeypatch):
         )
     assert len(asked) == 1  # second login reused the stored secret
     assert stat.S_IMODE((tmp_path / "kite_api_secret").stat().st_mode) == 0o600
+
+
+class FakeKiteDaily:
+    """Daily candles for INFY from 2015-01-01; NIFTYBEES listed later (2016-01-01)."""
+
+    listed = {"INFY": dt.date(2015, 1, 1), "NIFTYBEES": dt.date(2016, 1, 1)}
+
+    def __init__(self):
+        self.calls = []
+
+    def instruments(self, exchange):
+        return [
+            {"tradingsymbol": s, "instrument_token": i, "segment": "NSE", "instrument_type": "EQ"}
+            for i, s in enumerate(self.listed, start=1)
+        ]
+
+    def historical_data(self, token, from_date, to_date, interval):
+        self.calls.append((token, from_date, to_date, interval))
+        symbol = list(self.listed)[token - 1]
+        days = pd.bdate_range(max(from_date, self.listed[symbol]), to_date)
+        stamps = days.tz_localize("Asia/Kolkata")  # Kite: midnight IST, tz-aware
+        return [
+            {"date": t, "open": 100.0 + k, "high": 101.0 + k, "low": 99.0 + k,
+             "close": 100.5 + k, "volume": 1000}
+            for k, t in enumerate(stamps)
+        ]  # fmt: skip
+
+
+def test_daily_backfill_writes_one_sorted_file_per_symbol(tmp_path):
+    from forecasting.data.kite_backfill import (
+        MAX_DAYS_PER_DAILY_REQUEST,
+        backfill_daily,
+        load_daily,
+    )
+
+    kite = FakeKiteDaily()
+    start, end = dt.date(2014, 1, 1), dt.date(2024, 12, 31)
+    counts = backfill_daily(kite, ["INFY", "NIFTYBEES"], start, end, tmp_path, sleep=lambda s: None)
+    assert all(call[3] == "day" for call in kite.calls)
+    assert all((hi - lo).days < MAX_DAYS_PER_DAILY_REQUEST for _, lo, hi, _ in kite.calls)
+    assert {p.name for p in tmp_path.glob("*.parquet")} == {"INFY.parquet", "NIFTYBEES.parquet"}
+    data = load_daily(tmp_path)
+    infy = data["INFY"]
+    assert counts["INFY"] == len(infy) == len(pd.bdate_range("2015-01-01", end))
+    assert infy.index.is_monotonic_increasing and infy.index.is_unique
+    assert list(infy.columns) == ["open", "high", "low", "close", "volume"]
+    assert data["NIFTYBEES"].index[0] == pd.Timestamp("2016-01-01")  # listing date, not start
+
+    again = backfill_daily(kite, ["INFY"], start, end, tmp_path, sleep=lambda s: None)
+    assert again["INFY"] == counts["INFY"]  # a rerun replaces the file, no duplicates
+    assert len(load_daily(tmp_path, ["INFY"])["INFY"]) == counts["INFY"]
+
+
+def test_daily_backfill_refuses_a_foreign_folder(tmp_path):
+    from forecasting.data.kite_backfill import backfill_daily
+
+    (tmp_path / "something.txt").write_text("not ours")
+    with pytest.raises(FileExistsError):
+        backfill_daily(
+            FakeKiteDaily(), ["INFY"], dt.date(2020, 1, 1), dt.date(2020, 2, 1), tmp_path
+        )

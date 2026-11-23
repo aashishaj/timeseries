@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NSE Forecasting</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #e3e6ec;
+    --accent: #2457c5; --accent-text: #ffffff; --ok: #1d7a46; --ok-bg: #e5f4ea;
+    --warn: #8a5a00; --warn-bg: #fdf1dc; --bad: #b3261e; --bad-bg: #fbe7e6; --code: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --card: #1b2029; --text: #e7eaf0; --muted: #9aa3b2; --line: #2b313c;
+      --accent: #6b97ff; --accent-text: #0d1220; --ok: #6fd39a; --ok-bg: #173325;
+      --warn: #f0c36b; --warn-bg: #3a2e14; --bad: #ff8a80; --bad-bg: #3b1d1b; --code: #151a22;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+          padding: 18px; margin-bottom: 14px; }
+  .card h2 { font-size: 16px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+  .step { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+          background: var(--accent); color: var(--accent-text); font-size: 12px; font-weight: 600; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 13px; font-weight: 500; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); }
+  button { font: inherit; border: 0; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+           background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  input { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
+          background: var(--bg); color: var(--text); min-width: 0; flex: 1 1 220px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 14px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  pre { background: var(--code); border-radius: 8px; padding: 10px; margin: 10px 0 0;
+        max-height: 320px; overflow: auto; font-size: 12.5px; white-space: pre-wrap; }
+  .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; display: none; }
+  .banner.ok { background: var(--ok-bg); color: var(--ok); display: block; }
+  .banner.bad { background: var(--bad-bg); color: var(--bad); display: block; }
+  details summary { cursor: pointer; color: var(--accent); margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>NSE Forecasting</h1>
+  <p class="sub">Runs only on this Mac. Your Zerodha password and keys never leave it.</p>
+  <div id="banner" class="banner" role="status"></div>
+
+  <section class="card" aria-labelledby="h-login">
+    <h2 id="h-login"><span class="step">1</span>Log in to Kite</h2>
+    <p id="login-status" class="muted">Checking…</p>
+    <p class="muted">Kite logins end every morning at 6 AM, so this is needed once a day before downloading.</p>
+    <div class="row">
+      <button id="btn-login">Log in to Kite</button>
+    </div>
+    <details id="keys-box">
+      <summary>Kite app keys (only needed once, or after you regenerate the secret)</summary>
+      <p class="muted">From developers.kite.trade → your app. Saved privately on this Mac; never shown again.</p>
+      <div class="row">
+        <input id="api-key" placeholder="API key" autocomplete="off" spellcheck="false">
+        <input id="api-secret" type="password" placeholder="API secret" autocomplete="off">
+        <button id="btn-keys" class="secondary">Save keys</button>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-daily">
+    <h2 id="h-daily"><span class="step">2</span>Daily prices</h2>
+    <p id="daily-status" class="muted">Checking…</p>
+    <div class="row">
+      <button id="btn-daily">Download daily prices</button>
+      <span id="daily-hint" class="muted"></span>
+    </div>
+    <div class="table-wrap"><table id="daily-table" hidden>
+      <thead><tr><th>Symbol</th><th>Days</th><th>From</th><th>To</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-study">
+    <h2 id="h-study"><span class="step">3</span>When to invest, when to stay out</h2>
+    <p class="muted">Tests simple rules against buy and hold after brokerage, charges and tax.
+      Being built: its button appears here when it is ready.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-activity">
+    <h2 id="h-activity">Activity</h2>
+    <p id="job-status" class="muted">Nothing running.</p>
+    <pre id="job-log" hidden></pre>
+  </section>
+</main>
+<script>
+const TOKEN = "__UI_TOKEN__";
+const $ = (id) => document.getElementById(id);
+let status = null, timer = null;
+
+function banner(text, kind) {
+  const b = $("banner"); b.textContent = text; b.className = "banner " + kind;
+}
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json",
+    "X-UI-Token": TOKEN }, body: JSON.stringify(body || {}) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || ("Request failed (" + r.status + ")"));
+  return data;
+}
+function chip(text, kind) { return '<span class="chip ' + kind + '">' + text + "</span>"; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function render(s) {
+  status = s;
+  const k = s.kite, running = s.job && s.job.running;
+  if (!k.key_saved || !k.secret_saved) {
+    $("login-status").innerHTML = chip("Kite keys not saved", "warn") + " Open “Kite app keys” below once.";
+    $("keys-box").open = true;
+  } else if (k.logged_in_today) {
+    $("login-status").innerHTML = chip("Logged in today", "ok") + " <span class='muted'>at " + esc(k.token_saved_at) + "</span>";
+  } else {
+    $("login-status").innerHTML = chip("Not logged in today", "warn") +
+      (k.token_saved_at ? " <span class='muted'>last login " + esc(k.token_saved_at) + "</span>" : "");
+  }
+  $("btn-login").disabled = !k.key_saved || !k.secret_saved || running;
+
+  const rows = s.daily.symbols;
+  if (!rows.length) {
+    $("daily-status").textContent = "Not downloaded yet.";
+    $("daily-table").hidden = true;
+  } else {
+    const last = rows.map(r => r.last).filter(Boolean).sort().pop();
+    $("daily-status").innerHTML = chip(rows.length + " symbols", "ok") + " <span class='muted'>up to " + esc(last || "?") + "</span>";
+    $("daily-table").hidden = false;
+    $("daily-table").querySelector("tbody").innerHTML = rows.map(r =>
+      "<tr><td>" + esc(r.symbol) + "</td><td class='num'>" + r.days + "</td><td>" + esc(r.first || "-") +
+      "</td><td>" + esc(r.last || "-") + "</td></tr>").join("");
+  }
+  $("btn-daily").textContent = rows.length ? "Update daily prices" : "Download daily prices";
+  $("btn-daily").disabled = !k.logged_in_today || running;
+  $("daily-hint").textContent = k.logged_in_today ? "" : "Log in to Kite first.";
+
+  const j = s.job;
+  if (!j) { $("job-status").textContent = "Nothing running."; $("job-log").hidden = true; }
+  else {
+    const state = j.running ? chip("Running", "warn") : (j.ok ? chip("Done", "ok") : chip("Failed", "bad"));
+    $("job-status").innerHTML = state + " " + esc(j.name) + " <span class='muted'>· started " + esc(j.started) +
+      " · " + j.seconds + "s</span>";
+    const log = $("job-log"); log.hidden = false;
+    const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+    log.textContent = j.lines.join("\n") || "Starting…";
+    if (atBottom) log.scrollTop = log.scrollHeight;
+  }
+  clearTimeout(timer);
+  timer = setTimeout(refresh, running ? 1500 : 10000);
+}
+async function refresh() {
+  try { render(await (await fetch("/api/status")).json()); }
+  catch (e) { $("job-status").textContent = "The app stopped. Start it again to continue."; }
+}
+
+$("btn-login").onclick = async () => {
+  try { const r = await post("/api/login"); window.location.href = r.url; }
+  catch (e) { banner(e.message, "bad"); }
+};
+$("btn-keys").onclick = async () => {
+  try {
+    await post("/api/credentials", { api_key: $("api-key").value, api_secret: $("api-secret").value });
+    $("api-key").value = ""; $("api-secret").value = "";
+    banner("Kite keys saved on this Mac.", "ok"); $("keys-box").open = false; refresh();
+  } catch (e) { banner(e.message, "bad"); }
+};
+$("btn-daily").onclick = async () => {
+  try { await post("/api/download-daily"); banner("Downloading daily prices… progress is under Activity.", "ok"); refresh(); }
+  catch (e) { banner(e.message, "bad"); }
+};
+
+const q = new URLSearchParams(location.search);
+if (q.get("login") === "ok") banner("Logged in to Kite. You can download now.", "ok");
+if (q.get("login") === "failed") banner("Kite login did not complete: " + (q.get("why") || "unknown reason"), "bad");
+if (q.has("login")) history.replaceState(null, "", "/");
+refresh();
+</script>
+</body>
+</html>

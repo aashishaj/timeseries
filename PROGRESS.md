@@ -35,6 +35,49 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 
 ## Log
 
+### 2026-11-23, round 9: invest / stay-out signals (written before any data is downloaded)
+Goal from the owner: know when to be invested in shares and when not, judged by
+profit **after brokerage, statutory charges and income tax**, with 2% as the
+yardstick. Fixed now, before the long daily history is downloaded or looked at:
+
+- **Instruments:** the 10 stocks, plus NIFTYBEES (an ETF that tracks the NIFTY 50:
+  "the market as a whole"). Each is simulated as its own Rs 10 lakh account.
+- **Data:** Kite daily candles, as far back as Kite has them (aim: 10+ years).
+  **Lockbox: the last 3 years.** Everything earlier is development. Caveat: the
+  most recent year overlaps the minute data already studied; the rules below are
+  textbook ones, not tuned on it.
+- **Timing:** a signal uses closes up to day t; the trade happens at day t+1's
+  open. Delivery (CNC) charges from `configs/costs_delivery.yaml`.
+- **Tax:** short-term gains (held <= 12 months) 20%, long-term 12.5% above
+  Rs 1.25 lakh a financial year; losses set off as the Income Tax Act allows and
+  carried forward 8 years; tax paid out of the account after each 31 March.
+  Rates live in a config file marked "verify against the latest Budget".
+- **Cash earns 0%** while out of the market (conservative for the rules).
+  Dividends are not in Kite prices, for the rules or for buy and hold.
+- **Rules (parameters fixed, nothing tuned):**
+  - B: buy and hold (the benchmark).
+  - T: trend. Invested while the close is above its 200-day average, else cash.
+  - V: volatility. Invested unless the forecast of tomorrow's volatility (a
+    HAR-style model on daily high/low/open/close variance, the daily cousin of
+    the confirmed next-session model) is above its own past-year 80th percentile.
+  - TV: invested only when T and V both say so.
+  - Overlays on T, each judged separately: **take-profit**, sell once the gain
+    is large enough to leave 2% after charges and tax; **stop-loss**, sell after
+    a 2% fall from the entry price. After either, wait for T's next fresh entry.
+- **Reported for every rule and instrument, after all costs and tax:** yearly
+  return and its gap to buy and hold, share of months with a 2%+ gain, average
+  profit per trade, worst year, largest fall from a peak, trades a year, time
+  invested.
+- **One finalist** is picked on development: the rule with the best development
+  result under the pass rule below (ties: fewer trades). Only it is judged on the
+  lockbox, once.
+- **Pass rule (lockbox),** for NIFTYBEES and for at least 6 of the 10 stocks:
+  either (a) yearly return at least 2 percentage points above buy and hold, or
+  (b) yearly return within 1 point of buy and hold with the largest fall from a
+  peak at least a third smaller. Anything else, including 2% a month, is
+  reported but not claimed. Three lockbox years are few: a pass is a hint,
+  not proof.
+
 ### 2026-11-16, round 8: a held basket instead of daily round trips
 - New `forecasting papertrade-delivery` (`forecasting/trading/vol_managed.py`): the
   stocks are held overnight (delivery), sized by the next-session forecasts, and a

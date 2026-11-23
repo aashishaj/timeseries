@@ -286,3 +286,81 @@ def _fetch(client, token, lo, hi, interval, retries, sleep) -> list[dict]:
             log.warning("historical_data failed (%s); retrying in %.0fs", type(exc).__name__, wait)
             sleep(wait)
     return []
+
+
+# ---------------------------------------------------------------------- daily candles
+DAILY_MARKER = "_KITE_DAILY"
+MAX_DAYS_PER_DAILY_REQUEST = 1800  # Kite allows 2000 days for day candles; stay under it
+DAILY_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
+
+
+def backfill_daily(
+    client: HistoricalClient,
+    symbols: list[str],
+    start: dt.date,
+    end: dt.date,
+    out: str | Path,
+    *,
+    pause_seconds: float = 0.4,
+    retries: int = 4,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, int]:
+    """Download daily candles to ``out/<SYMBOL>.parquet`` (one file per symbol, columns
+    ``date open high low close volume``); returns the number of days per symbol.
+
+    Each run downloads the whole range again and replaces the file atomically: daily
+    history is a few requests per symbol, and a file is never left half-written.
+    Days before a stock was listed simply come back empty.
+    """
+    out = Path(out)
+    if out.exists() and any(out.iterdir()) and not (out / DAILY_MARKER).exists():
+        raise FileExistsError(f"{out} is not empty and is not a Kite daily-candle folder")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / DAILY_MARKER).write_text("daily candles from the Kite Connect historical API\n")
+    tokens = instrument_tokens(client, symbols)
+    counts: dict[str, int] = {}
+    for symbol in symbols:
+        frames = []
+        for lo, hi in date_chunks(start, end, MAX_DAYS_PER_DAILY_REQUEST):
+            rows = _fetch(client, tokens[symbol], lo, hi, "day", retries, sleep)
+            sleep(pause_seconds)
+            if rows:
+                frames.append(pd.DataFrame(rows))
+        if not frames:
+            log.warning("%s: no daily candles between %s and %s", symbol, start, end)
+            counts[symbol] = 0
+            continue
+        df = pd.concat(frames, ignore_index=True)
+        stamps = pd.to_datetime(df["date"])
+        if stamps.dt.tz is not None:
+            stamps = stamps.dt.tz_convert("Asia/Kolkata")
+        df["date"] = stamps.dt.date
+        df = (
+            df[DAILY_COLUMNS]
+            .drop_duplicates("date", keep="last")
+            .sort_values("date")
+            .reset_index(drop=True)
+        )
+        tmp = out / f"{symbol}.parquet.tmp"
+        pq.write_table(pa.Table.from_pandas(df, preserve_index=False), tmp)
+        tmp.replace(out / f"{symbol}.parquet")
+        counts[symbol] = len(df)
+        log.info("%s: %d days, %s -> %s", symbol, len(df), df["date"].iloc[0], df["date"].iloc[-1])
+    return counts
+
+
+def load_daily(root: str | Path, symbols: Iterable[str] | None = None) -> dict[str, pd.DataFrame]:
+    """Read ``backfill_daily`` output: symbol -> frame indexed by date."""
+    root = Path(root)
+    paths = sorted(root.glob("*.parquet"))
+    wanted = set(symbols) if symbols is not None else None
+    data = {}
+    for path in paths:
+        if wanted is not None and path.stem not in wanted:
+            continue
+        df = pd.read_parquet(path)
+        df["date"] = pd.to_datetime(df["date"])
+        data[path.stem] = df.set_index("date").sort_index()
+    if wanted is not None and (missing := sorted(wanted - set(data))):
+        raise FileNotFoundError(f"no daily file in {root} for {missing}")
+    return data

@@ -88,6 +88,19 @@ results/       markdown summaries of runs
 See [REAL_DATA.md](REAL_DATA.md): backfill 1-minute candles with your Kite Connect
 historical API on your own machine, then one `run-all` command produces the report.
 
+## The app (no commands needed)
+
+Double-click **`NSE Forecasting.command`** in this folder (Finder). It opens a page
+at http://127.0.0.1:8766 in your browser:
+
+1. **Log in to Kite** (once a day; Kite logins end at 6 AM). You sign in on
+   Zerodha's own page and come straight back.
+2. **Download / update daily prices** for the 10 stocks and NIFTYBEES.
+3. **When to invest, when to stay out**: the study (being built).
+
+Everything runs on your Mac only. Close the Terminal window the launcher opens to
+stop the app. (Same thing from a terminal: `uv run --extra kite forecasting ui`.)
+
 ## Quick start
 
 Needs [uv](https://docs.astral.sh/uv/) and Python 3.11+.

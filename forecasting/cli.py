@@ -393,6 +393,30 @@ def cmd_backfill_kite(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backfill_kite_daily(args: argparse.Namespace) -> int:
+    import datetime as dt
+
+    from forecasting.data.kite_backfill import backfill_daily, make_client
+
+    symbols = args.symbol or [*load_config(args.config).symbols, "NIFTYBEES"]
+    end = dt.date.fromisoformat(args.end) if args.end else dt.date.today()
+    start = dt.date.fromisoformat(args.start)
+    client = make_client(Path(args.token_file) if args.token_file else None)
+    counts = backfill_daily(client, symbols, start, end, args.out)
+    print(f"Wrote daily candles for {len(counts)} symbols to {args.out}:")
+    for symbol, n in counts.items():
+        print(f"  {symbol}: {n} days")
+    return 0
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    from forecasting.ui.server import App, serve
+
+    root = Path(__file__).resolve().parents[1]
+    serve(App(project_root=root), port=args.port, open_browser=not args.no_browser)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="forecasting", description=__doc__)
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -496,6 +520,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="store the API secret in ~/.config/nse-forecasting (0600) so it is asked only once",
     )
     p.set_defaults(func=cmd_kite_login)
+
+    p = sub.add_parser("ui", help="open the local app (Kite login, downloads, studies)")
+    p.add_argument("--port", type=int, default=8766, help="must match the Kite redirect URL")
+    p.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
+    p.set_defaults(func=cmd_ui)
+
+    p = sub.add_parser(
+        "backfill-kite-daily", help="download years of daily candles via the Kite historical API"
+    )
+    p.add_argument("--config", default=DEFAULT_EXPERIMENT, help="for the symbol list")
+    p.add_argument("--out", default="data/kite_daily")
+    p.add_argument("--start", default="2005-01-01", help="YYYY-MM-DD (Kite returns what it has)")
+    p.add_argument("--end", default=None, help="YYYY-MM-DD (default: today)")
+    p.add_argument(
+        "--symbol", action="append", help="these symbols only (default: config symbols + NIFTYBEES)"
+    )
+    p.add_argument("--token-file", default=None)
+    p.set_defaults(func=cmd_backfill_kite_daily)
 
     p = sub.add_parser("backfill-kite", help="download 1-min candles via the Kite historical API")
     p.add_argument("--config", default=DEFAULT_EXPERIMENT, help="for the symbol list")
