@@ -77,6 +77,36 @@ yardstick. Fixed now, before the long daily history is downloaded or looked at:
   peak at least a third smaller. Anything else, including 2% a month, is
   reported but not claimed. Three lockbox years are few: a pass is a hint,
   not proof.
+- Clarifications written after the download, before any rule was simulated:
+  (b) "within 1 point" means *no more than* 1 point below buy and hold (a rule
+  1.5 points above it must not fail). Weekend special sessions (Diwali muhurat,
+  Budget Saturdays) are dropped. Today's tax rules are applied to every year, to
+  judge the rules as they would work now. 4% cess is added to the tax.
+  "Time invested" counts days holding shares at the close.
+- **Data:** Kite daily candles 2005-01-03 -> 2026-11-23 for all 11 instruments
+  (about 5,410 days each). Every move over 18% is a real event (2008, the May 2009
+  election rally, INFY Apr 2013, SBIN Oct 2017, Mar 2020); no unadjusted splits.
+- **Development (2007-02-13 -> 2023-11-23, after charges and tax, medians over the
+  11 accounts):** buy and hold 11.9% a year, largest fall -59%. Trend 6.0% (-55%),
+  volatility 6.3% (-57%), both 3.6% (-48%), trend + stop-loss 0.8%, trend +
+  take-profit 0.1% (-22%: mostly in cash). Rules passing: volatility 1 of 10 stocks,
+  every other rule 0; NIFTYBEES fails every rule.
+  - Not a cost or code artefact: with zero charges and zero tax the trend rule still
+    trails buy and hold by 2-9 points on most stocks (NIFTYBEES -2.3); charges add
+    ~1-1.5, tax ~0.5-1.5. A separate vectorised calculation matches the simulator
+    to 3 decimals. The trend rule dodged 2008 (+21 to +30 points) but sat out the
+    2009 rebound (-34 on NIFTYBEES, -64 on INFY) and whipsawed in flat years.
+- **Finalist:** volatility (the only rule with a pass). **Lockbox, opened once
+  (2023-11-24 -> 2026-11-23): fails.** 0 of 10 stocks, NIFTYBEES no; -9.6 points a
+  year against buy and hold (median), falls 7% deeper, 21 trades a year.
+  `results/timing/development.md`, `results/timing/lockbox.md`.
+- **The 2% question:** no rule and no buy-and-hold account averaged 2% a month
+  after tax (buy and hold: 1.3% a month on average in development). Months with a
+  2%+ after-tax gain: buy and hold 44% (development), 38% (lockbox); the rules
+  fewer. Trades that ended 2%+ up after tax: rare for every rule.
+- **Conclusion:** for these 10 large caps and NIFTYBEES, none of these textbook
+  timing rules beat staying invested after charges and tax, in 17 years of
+  development data or in the last 3 years. The app shows these results.
 
 ### 2026-11-16, round 8: a held basket instead of daily round trips
 - New `forecasting papertrade-delivery` (`forecasting/trading/vol_managed.py`): the

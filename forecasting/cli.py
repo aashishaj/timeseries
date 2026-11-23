@@ -417,6 +417,15 @@ def cmd_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_timing_study(args: argparse.Namespace) -> int:
+    from forecasting.timing.study import run_study
+
+    path = run_study(Path(args.data_root), Path(args.out), args.split)
+    print(path.read_text())
+    log.info("written to %s", path)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="forecasting", description=__doc__)
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -520,6 +529,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="store the API secret in ~/.config/nse-forecasting (0600) so it is asked only once",
     )
     p.set_defaults(func=cmd_kite_login)
+
+    p = sub.add_parser("timing-study", help="invest / stay-out rules after charges and tax")
+    p.add_argument("--data-root", default="data/kite_daily")
+    p.add_argument("--out", default="results/timing")
+    p.add_argument(
+        "--split", choices=["dev", "final"], default="dev", help="final opens the lockbox"
+    )
+    p.set_defaults(func=cmd_timing_study)
 
     p = sub.add_parser("ui", help="open the local app (Kite login, downloads, studies)")
     p.add_argument("--port", type=int, default=8766, help="must match the Kite redirect URL")

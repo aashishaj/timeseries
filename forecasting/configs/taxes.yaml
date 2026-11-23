@@ -1,0 +1,9 @@
+# Indian income tax on listed equity shares (STT paid), for a resident individual.
+# Rates as of the July 2024 Budget. VERIFY against the latest Budget before relying
+# on any after-tax number. Surcharge (only at high incomes) is not modelled.
+stcg_rate: 0.20            # short-term: held 12 months or less
+ltcg_rate: 0.125           # long-term: held more than 12 months ...
+ltcg_exempt_inr: 125000    # ... on long-term gains above Rs 1.25 lakh a financial year
+cess_rate: 0.04            # health and education cess, on the tax
+long_term_after_months: 12 # long-term if held more than 12 months
+carry_forward_years: 8     # capital losses can be carried forward 8 years

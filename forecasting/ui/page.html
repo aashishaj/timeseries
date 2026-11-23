@@ -93,8 +93,9 @@
 
   <section class="card" aria-labelledby="h-study">
     <h2 id="h-study"><span class="step">3</span>When to invest, when to stay out</h2>
-    <p class="muted">Tests simple rules against buy and hold after brokerage, charges and tax.
-      Being built: its button appears here when it is ready.</p>
+    <p class="muted">Simple rules for being in or out of each stock, compared with buy and hold,
+      after Zerodha delivery charges and income tax. Each stock is a separate Rs 10 lakh account.</p>
+    <div id="study-body"><p class="muted">No results yet.</p></div>
   </section>
 
   <section class="card" aria-labelledby="h-activity">
@@ -185,6 +186,32 @@ $("btn-daily").onclick = async () => {
   try { await post("/api/download-daily"); banner("Downloading daily prices… progress is under Activity.", "ok"); refresh(); }
   catch (e) { banner(e.message, "bad"); }
 };
+
+function pct(x, digits) { return (x * 100).toFixed(digits === undefined ? 1 : digits) + "%"; }
+function studyTable(part, title) {
+  const rows = part.rules.map(r => "<tr><td>" + esc(r.rule) + "</td><td class='num'>" + pct(r.yearly_return) +
+    "</td><td class='num'>" + pct(r.largest_fall, 0) + "</td><td class='num'>" + pct(r.months_2pct, 0) +
+    "</td><td class='num'>" + r.trades_per_year.toFixed(1) + "</td><td>" +
+    (r.benchmark ? "benchmark" : (r.stocks_passing + " of " + r.n_stocks + (r.market_passes ? ", NIFTYBEES yes" : ", NIFTYBEES no"))) +
+    "</td></tr>").join("");
+  return "<h3 style='font-size:14px;margin:14px 0 2px'>" + esc(title) + " <span class='muted' style='font-weight:400'>" +
+    esc(part.start) + " to " + esc(part.end) + "</span></h3><div class='table-wrap'><table><thead><tr>" +
+    "<th>Rule</th><th>Yearly return</th><th>Largest fall</th><th>Months +2%</th><th>Trades/yr</th><th>Passes</th>" +
+    "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+}
+async function loadStudy() {
+  const s = await (await fetch("/api/study")).json();
+  if (!s.available) return;
+  const anyPass = ["dev", "final"].some(k => s[k] && s[k].rules.some(r => !r.benchmark && r.market_passes));
+  let html = "<p>" + (anyPass ? chip("Some rules passed", "ok") : chip("No rule beat buy and hold", "warn")) +
+    " <span class='muted'>Yearly return and largest fall are medians across the 11 accounts, after charges and tax.</span></p>";
+  if (s.dev) html += studyTable(s.dev, "Development years");
+  if (s.final) html += studyTable(s.final, "Lockbox (checked once)");
+  html += "<p class='muted'>A rule passes for a stock if it returns at least 2 points a year more than buy and hold, " +
+    "or no more than 1 point less with a largest fall at least a third smaller. These are past results, not advice.</p>";
+  $("study-body").innerHTML = html;
+}
+loadStudy();
 
 const q = new URLSearchParams(location.search);
 if (q.get("login") === "ok") banner("Logged in to Kite. You can download now.", "ok");

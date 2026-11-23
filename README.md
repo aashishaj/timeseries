@@ -69,6 +69,21 @@ and trades a stock only when its weight is more than 25% away from its target. W
 * Details: [all models and periods](results/lockbox_kite/paper_trading_delivery.md),
   [band comparison](results/run_kite/paper_trading_delivery_bands.md).
 
+### When to invest and when to stay out
+
+Five textbook rules (200-day trend, a volatility filter, both, trend with a 2%
+take-profit, trend with a 2% stop-loss), each on the 10 stocks and NIFTYBEES as
+separate Rs 10 lakh accounts, after delivery charges and income tax:
+
+| period | buy and hold (median yearly return) | best rule | rules beating buy and hold |
+|---|---|---|---|
+| 2007-2023 (development) | 11.9% | volatility filter, 6.3% | 1 of 50 stock/rule pairs; NIFTYBEES none |
+| 2023-2026 (lockbox, checked once) | 8.1% | volatility filter, -1.2% | none |
+
+Staying invested beat every rule. The rules made some falls shallower but missed
+fast rebounds (2009, 2020) and paid charges and short-term tax on every round trip.
+[Development](results/timing/development.md), [lockbox](results/timing/lockbox.md).
+
 ## Layout
 
 ```
@@ -96,7 +111,7 @@ at http://127.0.0.1:8766 in your browser:
 1. **Log in to Kite** (once a day; Kite logins end at 6 AM). You sign in on
    Zerodha's own page and come straight back.
 2. **Download / update daily prices** for the 10 stocks and NIFTYBEES.
-3. **When to invest, when to stay out**: the study (being built).
+3. **When to invest, when to stay out**: results of the study below.
 
 Everything runs on your Mac only. Close the Terminal window the launcher opens to
 stop the app. (Same thing from a terminal: `uv run --extra kite forecasting ui`.)

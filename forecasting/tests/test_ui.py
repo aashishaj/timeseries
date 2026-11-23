@@ -163,3 +163,23 @@ def test_download_needs_a_login_then_runs_as_a_background_job(running):
     assert job["ok"], job["lines"]
     daily = json.loads(call(port, "GET", "/api/status")[2])["daily"]["symbols"]
     assert daily[0]["symbol"] == "INFY" and daily[0]["days"] > 200
+
+
+def test_study_results_are_served_read_only(running):
+    app, port = running
+    assert json.loads(call(port, "GET", "/api/study")[2]) == {"available": False}
+    folder = app.root / "results" / "timing"
+    folder.mkdir(parents=True)
+    rows = [
+        {"instrument": i, "rule": r, "cagr": c, "max_drawdown": -0.3, "months_2pct": 0.4,
+         "trades_per_year": 1.0, "passes": p, "start": "2007-01-01", "end": "2023-11-23"}
+        for i in ("AAA", "NIFTYBEES")
+        for r, c, p in (("B", 0.12, False), ("T", 0.06, False))
+    ]  # fmt: skip
+    pd.DataFrame(rows).to_csv(folder / "metrics_dev.csv", index=False)
+    study = json.loads(call(port, "GET", "/api/study")[2])
+    assert study["available"] and "final" not in study
+    first, second = study["dev"]["rules"]
+    assert first["benchmark"] and first["yearly_return"] == pytest.approx(0.12)
+    assert second["stocks_passing"] == 0 and second["market_passes"] is False
+    assert call(port, "POST", "/api/study", {})[0] == 403  # nothing to post: read-only

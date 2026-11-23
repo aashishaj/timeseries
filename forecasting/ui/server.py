@@ -140,6 +140,40 @@ class App:
             "job": self.job.as_dict() if self.job else None,
         }
 
+    def study(self) -> dict[str, Any]:
+        """The invest / stay-out study's results, if it has been run (read-only)."""
+        from forecasting.timing.study import LABELS, MARKET
+
+        folder = self.root / "results" / "timing"
+        out: dict[str, Any] = {"available": False}
+        for split in ("dev", "final"):
+            path = folder / f"metrics_{split}.csv"
+            if not path.exists():
+                continue
+            t = pd.read_csv(path)
+            rows = []
+            for rule, g in t.groupby("rule", sort=False):
+                stocks = g[g["instrument"] != MARKET]
+                rows.append(
+                    {
+                        "rule": LABELS.get(rule, rule),
+                        "benchmark": rule == "B",
+                        "yearly_return": float(g["cagr"].median()),
+                        "largest_fall": float(g["max_drawdown"].median()),
+                        "months_2pct": float(g["months_2pct"].mean()),
+                        "trades_per_year": float(g["trades_per_year"].mean()),
+                        "stocks_passing": None if rule == "B" else int(stocks["passes"].sum()),
+                        "n_stocks": len(stocks),
+                        "market_passes": None
+                        if rule == "B"
+                        else bool(g.loc[g["instrument"] == MARKET, "passes"].any()),
+                    }
+                )
+            rows.sort(key=lambda r: (not r["benchmark"], -r["yearly_return"]))
+            out[split] = {"start": t["start"].min(), "end": t["end"].max(), "rules": rows}
+            out["available"] = True
+        return out
+
     def daily_summary(self) -> dict[str, Any]:
         rows = []
         for path in sorted(self.daily_dir.glob("*.parquet")):
@@ -309,6 +343,8 @@ def make_handler(app: App, port: int) -> type[BaseHTTPRequestHandler]:
                 return self._send(HTTPStatus.OK, page.encode(), "text/html; charset=utf-8")
             if url.path == "/api/status":
                 return self._json(HTTPStatus.OK, app.status())
+            if url.path == "/api/study":
+                return self._json(HTTPStatus.OK, app.study())
             if url.path == "/callback":
                 try:
                     app.finish_login(parse_qs(url.query))
