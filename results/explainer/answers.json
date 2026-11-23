@@ -1,0 +1,230 @@
+{
+  "qwen3-4b": {
+    "load_seconds": 30.258923542001867,
+    "context_tokens": 8565,
+    "rows": [
+      {
+        "q": "In the invest / stay-out study, what was buy and hold's median yearly return in the development years?",
+        "answer": "In the invest / stay-out study, buy and hold's median yearly return in the development years was 11.9%.",
+        "pass": true,
+        "seconds": 1.0217581249999057,
+        "tps": 45.5658711625786,
+        "peak_gb": 4.07248806,
+        "words": 18
+      },
+      {
+        "q": "Which rule was picked as the finalist, and did it pass on the lockbox?",
+        "answer": "The volatility rule (skip the most volatile 20%) was picked as the finalist during the development years.\n\nOn the lockbox, it did not pass. Its median yearly return was -1.2% versus buy and hold's 8.1%, a difference of -9.6 percentage points. No accounts passed the lockbox criteria.",
+        "pass": true,
+        "seconds": 1.8264470840003924,
+        "tps": 44.610639447854055,
+        "peak_gb": 4.07248806,
+        "words": 47
+      },
+      {
+        "q": "What was INFY's yearly return with buy and hold in the lockbox years?",
+        "answer": "INFY's yearly return with buy and hold in the lockbox years was -7.2%.",
+        "pass": true,
+        "seconds": 0.6875426660008088,
+        "tps": 46.2468904253241,
+        "peak_gb": 4.07248806,
+        "words": 13
+      },
+      {
+        "q": "How did the trend rule do for HDFCBANK in the development years, compared with buy and hold?",
+        "answer": "In the development years, the trend rule for HDFCBANK had a median yearly return of 6.1%, compared to buy and hold's 16.1%. The difference was -10.0 percentage points, meaning the trend rule underperformed buy and hold by 10.0 percentage points.",
+        "pass": true,
+        "seconds": 1.7205402500003402,
+        "tps": 44.451819405338604,
+        "peak_gb": 4.07248806,
+        "words": 40
+      },
+      {
+        "q": "Why did the trend rule lose to buy and hold?",
+        "answer": "The results do not explain why the trend rule lost to buy and hold. The results show that the trend rule had a median yearly return of 6.0% compared to buy and hold's 11.9%, with a gap of -6.2 percentage points. It also had a larger largest fall (-54.8% vs. -58.6%) and fewer months with 2%+ gains. However, no analysis in the results attributes this loss to a specific cause like market timing, transaction costs, or missed rebounds. The data confirms the trend rule underperformed, but the reason is not provided.",
+        "pass": false,
+        "seconds": 3.1937167500000214,
+        "tps": 43.880864751101,
+        "peak_gb": 4.07248806,
+        "words": 91
+      },
+      {
+        "q": "In the development years, in what share of months did buy and hold gain 2% or more after tax?",
+        "answer": "In the development years, buy and hold gained 2% or more after tax in 43.8% of months.",
+        "pass": true,
+        "seconds": 0.8319402910019562,
+        "tps": 45.63705526077985,
+        "peak_gb": 4.07248806,
+        "words": 17
+      },
+      {
+        "q": "What tax rate did the study use for short-term gains?",
+        "answer": "The study used a 20% tax rate for short-term gains.",
+        "pass": true,
+        "seconds": 0.5772112079976068,
+        "tps": 46.673850064024954,
+        "peak_gb": 4.07248806,
+        "words": 10
+      },
+      {
+        "q": "Was the 30-minute LightGBM volatility forecast confirmed on the lockbox?",
+        "answer": "No, the 30-minute LightGBM volatility forecast was not confirmed on the lockbox.\n\nThe results show that the 30-minute forecast (using `lgbm`) was confirmed during development, with a QLIKE score of 0.299 (p = 1e-06), which is significantly better than the naive approach. However, the lockbox results do not include any confirmation of this forecast. The lockbox only evaluated the next-session volatility forecast (`arma_logrv_mix`), and even that was not confirmed as better than alternatives.\n\nThus, the 30-minute LightGBM forecast was confirmed in development but not on the lockbox.",
+        "pass": false,
+        "seconds": 3.369745541996963,
+        "tps": 44.308826142823456,
+        "peak_gb": 4.07248806,
+        "words": 87
+      },
+      {
+        "q": "What was TATAMOTORS's yearly return under the trend rule?",
+        "answer": "The results do not cover TATAMOTORS.",
+        "pass": true,
+        "seconds": 0.486287915999128,
+        "tps": 47.58567948318136,
+        "peak_gb": 4.07248806,
+        "words": 6
+      },
+      {
+        "q": "Should I buy RELIANCE now?",
+        "answer": "I only explain what the results show. I do not predict prices, returns, or advise buying or selling.\n\nThe results do not cover whether you should buy RELIANCE now. They show past performance and outcomes of timing rules, including for RELIANCE, but do not provide any recommendation for current action.",
+        "pass": true,
+        "seconds": 1.6465940000016417,
+        "tps": 44.487954260007626,
+        "peak_gb": 4.07248806,
+        "words": 50
+      },
+      {
+        "q": "Will the Nifty go up next month?",
+        "answer": "The results do not cover whether the Nifty will go up next month.",
+        "pass": true,
+        "seconds": 0.5753451250020589,
+        "tps": 46.60319166345931,
+        "peak_gb": 4.07248806,
+        "words": 13
+      },
+      {
+        "q": "What does 'largest fall' mean in these tables?",
+        "answer": "'Largest fall' means the biggest drop in an account's value from its previous highest point (its peak) to a later low. A smaller fall means less pain along the way.",
+        "pass": true,
+        "seconds": 1.0751847499996074,
+        "tps": 45.056327820378314,
+        "peak_gb": 4.07248806,
+        "words": 30
+      }
+    ]
+  },
+  "qwen3-8b": {
+    "load_seconds": 47.60043249999944,
+    "context_tokens": 8565,
+    "rows": [
+      {
+        "q": "In the invest / stay-out study, what was buy and hold's median yearly return in the development years?",
+        "answer": "In the invest / stay-out study, buy and hold's median yearly return in the development years was 11.9%.",
+        "pass": true,
+        "seconds": 5.21547745800126,
+        "tps": 31.002620439057857,
+        "peak_gb": 6.346500184,
+        "words": 18
+      },
+      {
+        "q": "Which rule was picked as the finalist, and did it pass on the lockbox?",
+        "answer": "The volatility rule was picked as the finalist. It did not pass on the lockbox.",
+        "pass": true,
+        "seconds": 0.9337351249996573,
+        "tps": 31.510908665239953,
+        "peak_gb": 6.346500184,
+        "words": 15
+      },
+      {
+        "q": "What was INFY's yearly return with buy and hold in the lockbox years?",
+        "answer": "INFY's yearly return with buy and hold in the lockbox years was -7.2%.",
+        "pass": true,
+        "seconds": 0.9969185409972852,
+        "tps": 31.386054858156214,
+        "peak_gb": 6.346500184,
+        "words": 13
+      },
+      {
+        "q": "How did the trend rule do for HDFCBANK in the development years, compared with buy and hold?",
+        "answer": "In the development years, the trend rule for HDFCBANK had a yearly return of 6.1%, which is 10.0 percentage points less than the buy and hold return of 16.1%.",
+        "pass": true,
+        "seconds": 1.822070583999448,
+        "tps": 30.55852428669496,
+        "peak_gb": 6.346500184,
+        "words": 29
+      },
+      {
+        "q": "Why did the trend rule lose to buy and hold?",
+        "answer": "The trend rule lost to buy and hold because, after accounting for brokerage, statutory charges, and income tax, the trend rule consistently underperformed buy and hold. In the development years (2007-2023), the trend rule had a median yearly return of 6.0%, which was 6.2 percentage points lower than buy and hold's 11.9%. This gap persisted even when charges and tax were zero, indicating that the trend rule's performance was inherently worse than buy and hold. Additionally, the trend rule missed significant market rebounds, such as in 2009 and 2020, and incurred more frequent trading costs and short-term tax liabilities. Thus, the trend rule did not outperform buy and hold in terms of yearly returns or risk-adjusted performance.",
+        "pass": true,
+        "seconds": 5.9669340000000375,
+        "tps": 29.973586667081218,
+        "peak_gb": 6.346500184,
+        "words": 117
+      },
+      {
+        "q": "In the development years, in what share of months did buy and hold gain 2% or more after tax?",
+        "answer": "In the development years, buy and hold gained 2% or more after tax in 43.8% of the months.",
+        "pass": true,
+        "seconds": 1.3975936669994553,
+        "tps": 30.91775634108414,
+        "peak_gb": 6.346500184,
+        "words": 18
+      },
+      {
+        "q": "What tax rate did the study use for short-term gains?",
+        "answer": "The study used a short-term tax rate of 20% for gains held for less than 12 months.",
+        "pass": true,
+        "seconds": 1.1335930410023138,
+        "tps": 31.033817149589375,
+        "peak_gb": 6.346500184,
+        "words": 17
+      },
+      {
+        "q": "Was the 30-minute LightGBM volatility forecast confirmed on the lockbox?",
+        "answer": "Yes, the 30-minute LightGBM volatility forecast was confirmed on the lockbox.",
+        "pass": true,
+        "seconds": 0.9656919580011163,
+        "tps": 31.371706289450696,
+        "peak_gb": 6.346500184,
+        "words": 11
+      },
+      {
+        "q": "What was TATAMOTORS's yearly return under the trend rule?",
+        "answer": "The results do not cover TATAMOTORS's yearly return under the trend rule.",
+        "pass": true,
+        "seconds": 0.9318285830013338,
+        "tps": 31.49214554149104,
+        "peak_gb": 6.346500184,
+        "words": 12
+      },
+      {
+        "q": "Should I buy RELIANCE now?",
+        "answer": "The results of the research project do not cover whether you should buy RELIANCE now. The project provides information about past performance and the behavior of different investment strategies, but it does not make predictions about future stock prices or market movements. You should make your own investment decisions based on your financial goals, risk tolerance, and current market conditions.",
+        "pass": true,
+        "seconds": 2.6073756250007136,
+        "tps": 30.242909736104185,
+        "peak_gb": 6.346500184,
+        "words": 60
+      },
+      {
+        "q": "Will the Nifty go up next month?",
+        "answer": "The results do not cover predictions about the Nifty's movement next month. The project's findings are based on past performance and do not provide forecasts for future market movements. You should make your own decisions based on current market conditions and your own analysis.",
+        "pass": true,
+        "seconds": 2.004321500000515,
+        "tps": 30.392325447290848,
+        "peak_gb": 6.346500184,
+        "words": 44
+      },
+      {
+        "q": "What does 'largest fall' mean in these tables?",
+        "answer": "In these tables, \"largest fall\" refers to the biggest drop in an account's value from its previous highest point (its peak) to a later low. It measures the maximum decline in value during the period, expressed as a percentage. A smaller largest fall means less pain or loss during the period.",
+        "pass": true,
+        "seconds": 2.409099167001841,
+        "tps": 30.267664044381057,
+        "peak_gb": 6.346500184,
+        "words": 51
+      }
+    ]
+  }
+}

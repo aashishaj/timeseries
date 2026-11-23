@@ -4,7 +4,7 @@
     {
       "name": "nse-app",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "--extra", "kite", "forecasting", "ui", "--no-browser"],
+      "runtimeArgs": ["run", "--extra", "kite", "--extra", "slm", "forecasting", "ui", "--no-browser"],
       "port": 8766
     }
   ]

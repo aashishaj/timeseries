@@ -21,4 +21,4 @@ if [ -z "$UV" ]; then
   exit 1
 fi
 
-exec "$UV" run --extra kite forecasting ui
+exec "$UV" run --extra kite --extra slm forecasting ui

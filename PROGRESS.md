@@ -35,6 +35,26 @@ a lockbox win on **real** NSE data; synthetic wins only show the pipeline works.
 
 ## Log
 
+### 2026-11-23, round 10: a local model that explains the results
+- The app's "Ask about the results" box runs a small language model on the Mac
+  (Apple MLX, `--extra slm`), offline, loaded from the local Hugging Face cache.
+  It sees only the project's computed results (README results section, round 9
+  findings, the study's summary and per-account tables) plus a glossary, about
+  5,000 tokens, cached once per model. Rules: quote numbers exactly, say when
+  something is not covered, never predict prices or advise buying or selling.
+- Compared Qwen3 4B Instruct (2.3 GB) and Qwen3 8B (4.6 GB), both 4-bit, on 12
+  questions whose answers come from the result files
+  (`forecasting/ui/explainer_eval.py`, `results/explainer/comparison.md`).
+  - First runs (temperature 0.2): both invented precision (44.3% for 44%) and the
+    8B misdefined "largest fall". A glossary and per-rule summary table fixed both.
+    Answers varied run to run, so answers are now deterministic (temperature 0).
+  - Final run: **8B right on 12 of 12, 4B on 10 of 12** (4B said the 30-minute
+    forecast was not confirmed on the lockbox, and that the results do not explain
+    the trend rule's loss). 8B: 1.8 s an answer, 6.3 GB peak; 4B: 1.1 s, 4.1 GB.
+    Both declined advice and predictions every time. Default: 8B.
+  - The automatic checks are pattern matches and passed one wrong 4B answer until
+    tightened; every answer was also read by hand.
+
 ### 2026-11-23, round 9: invest / stay-out signals (written before any data is downloaded)
 Goal from the owner: know when to be invested in shares and when not, judged by
 profit **after brokerage, statutory charges and income tax**, with 2% as the

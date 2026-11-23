@@ -20,6 +20,8 @@ kite = ["kiteconnect>=5"]
 deep = ["torch>=2.1"]
 # Rung 4 Chronos zero-shot foundation model (also needs torch).
 foundation = ["torch>=2.1", "chronos-forecasting>=1.5"]
+# Local language model that explains results in the app (Apple-silicon Macs only).
+slm = ["mlx-lm>=0.32; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 
 [project.scripts]
 forecasting = "forecasting.cli:main"

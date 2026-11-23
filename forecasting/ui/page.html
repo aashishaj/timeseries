@@ -52,6 +52,12 @@
   .banner.ok { background: var(--ok-bg); color: var(--ok); display: block; }
   .banner.bad { background: var(--bad-bg); color: var(--bad); display: block; }
   details summary { cursor: pointer; color: var(--accent); margin-top: 10px; }
+  select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--bg); color: var(--text); }
+  .suggest { background: transparent; color: var(--accent); border: 1px solid var(--line);
+             font-weight: 500; font-size: 13px; padding: 5px 10px; }
+  .answer { background: var(--code); border-radius: 8px; padding: 12px 14px; margin-top: 12px;
+            white-space: pre-wrap; line-height: 1.55; }
 </style>
 </head>
 <body>
@@ -98,6 +104,26 @@
     <div id="study-body"><p class="muted">No results yet.</p></div>
   </section>
 
+  <section class="card" aria-labelledby="h-ask">
+    <h2 id="h-ask"><span class="step">4</span>Ask about the results</h2>
+    <p class="muted">A small language model running on this Mac explains the results in plain English.
+      It only knows what the project computed, and it does not give advice or predictions.</p>
+    <div id="ask-setup"></div>
+    <div id="ask-box" hidden>
+      <div class="row">
+        <select id="ask-model" aria-label="Model"></select>
+      </div>
+      <div class="row">
+        <input id="ask-q" maxlength="1000" placeholder="e.g. Why did the trend rule lose to buy and hold?">
+        <button id="btn-ask">Ask</button>
+      </div>
+      <div class="row" id="ask-suggest"></div>
+      <div id="ask-answer" class="answer" hidden></div>
+      <p class="muted" style="font-size:13px">Small models can still slip: check any number against the tables above.</p>
+      <p id="ask-meta" class="muted" hidden></p>
+    </div>
+  </section>
+
   <section class="card" aria-labelledby="h-activity">
     <h2 id="h-activity">Activity</h2>
     <p id="job-status" class="muted">Nothing running.</p>
@@ -107,7 +133,7 @@
 <script>
 const TOKEN = "__UI_TOKEN__";
 const $ = (id) => document.getElementById(id);
-let status = null, timer = null;
+let status = null, timer = null, wasRunning = false;
 
 function banner(text, kind) {
   const b = $("banner"); b.textContent = text; b.className = "banner " + kind;
@@ -163,6 +189,8 @@ function render(s) {
     log.textContent = j.lines.join("\n") || "Starting…";
     if (atBottom) log.scrollTop = log.scrollHeight;
   }
+  if (wasRunning && !running) refreshAsk();  // e.g. a model download just finished
+  wasRunning = running;
   clearTimeout(timer);
   timer = setTimeout(refresh, running ? 1500 : 10000);
 }
@@ -212,6 +240,54 @@ async function loadStudy() {
   $("study-body").innerHTML = html;
 }
 loadStudy();
+
+const SUGGEST = ["Why did the trend rule lose to buy and hold?", "Did any rule pass on the lockbox?",
+  "How often did buy and hold make 2% in a month?", "What does 'largest fall' mean?",
+  "What did the volatility forecasts achieve?"];
+let askTimer = null, askBuilt = false;
+async function refreshAsk() {
+  const s = await (await fetch("/api/explainer")).json();
+  const installed = s.models.filter(m => m.installed);
+  let setup = "";
+  if (!s.runtime) setup = "<p>" + chip("Not set up", "warn") + " The local model runtime is not installed on this Mac.</p>";
+  s.models.filter(m => !m.installed).forEach(m => {
+    setup += "<div class='row'><span>" + esc(m.label) + " is not downloaded (" + m.size_gb.toFixed(1) +
+      " GB from huggingface.co).</span><button class='secondary' data-dl='" + esc(m.key) + "'>Download</button></div>";
+  });
+  $("ask-setup").innerHTML = setup;
+  $("ask-setup").querySelectorAll("button[data-dl]").forEach(b => b.onclick = async () => {
+    try { await post("/api/download-model", { model: b.dataset.dl }); banner("Downloading… progress is under Activity.", "ok"); refresh(); }
+    catch (e) { banner(e.message, "bad"); }
+  });
+  $("ask-box").hidden = !(s.runtime && installed.length);
+  if (!askBuilt && installed.length) {
+    $("ask-model").innerHTML = installed.map(m => "<option value='" + esc(m.key) + "'" + (m.key === s.default ? " selected" : "") +
+      ">" + esc(m.label) + "</option>").join("");
+    $("ask-suggest").innerHTML = SUGGEST.map(q => "<button class='suggest'>" + esc(q) + "</button>").join("");
+    $("ask-suggest").querySelectorAll("button").forEach(b => b.onclick = () => { $("ask-q").value = b.textContent; ask(); });
+    askBuilt = true;
+  }
+  const a = s.answer;
+  if (a) {
+    $("ask-answer").hidden = false;
+    $("ask-answer").textContent = a.error ? ("Something went wrong: " + a.error) : (a.text || "Thinking… (the first question loads the model, about 10–30 seconds)");
+    $("ask-meta").hidden = false;
+    $("ask-meta").textContent = "“" + a.question + "” · " + a.model + " · " + a.seconds + " s" +
+      (a.done && a.tokens_per_second ? " · " + a.tokens_per_second + " tokens/s" : "") + (a.done ? "" : " · writing…");
+    $("btn-ask").disabled = !a.done;
+  }
+  clearTimeout(askTimer);
+  if (a && !a.done) askTimer = setTimeout(refreshAsk, 400);
+}
+async function ask() {
+  const question = $("ask-q").value.trim();
+  if (!question) return;
+  try { await post("/api/ask", { model: $("ask-model").value, question }); refreshAsk(); }
+  catch (e) { banner(e.message, "bad"); }
+}
+$("btn-ask").onclick = ask;
+$("ask-q").addEventListener("keydown", e => { if (e.key === "Enter") ask(); });
+refreshAsk();
 
 const q = new URLSearchParams(location.search);
 if (q.get("login") === "ok") banner("Logged in to Kite. You can download now.", "ok");

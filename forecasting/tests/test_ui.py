@@ -183,3 +183,53 @@ def test_study_results_are_served_read_only(running):
     assert first["benchmark"] and first["yearly_return"] == pytest.approx(0.12)
     assert second["stocks_passing"] == 0 and second["market_passes"] is False
     assert call(port, "POST", "/api/study", {})[0] == 403  # nothing to post: read-only
+
+
+class FakeExplainer:
+    def __init__(self, root):
+        self.root = root
+
+    def ask(self, key, question, on_text=None):
+        from forecasting.ui.explainer import Answer
+
+        time.sleep(0.2)
+        if on_text:
+            on_text("Buy and hold")
+        return Answer(question=question, model=key, text="Buy and hold returned 11.9%.", done=True)
+
+
+def test_ask_validates_and_answers_one_question_at_a_time(running, monkeypatch):
+    from forecasting.ui import explainer as ex
+
+    app, port = running
+    monkeypatch.setattr(ex, "runtime_available", lambda: True)
+    monkeypatch.setattr(ex, "is_installed", lambda key: key == "qwen3-4b")
+    monkeypatch.setattr(ex, "Explainer", FakeExplainer)
+    status = json.loads(call(port, "GET", "/api/explainer")[2])
+    assert status["runtime"] and [m["installed"] for m in status["models"]] == [True, False]
+    assert post(app, port, "/api/ask", {"model": "qwen3-4b", "question": " "})[0] == 409
+    assert post(app, port, "/api/ask", {"model": "nope", "question": "hi"})[0] == 409
+    assert post(app, port, "/api/ask", {"model": "qwen3-8b", "question": "hi"})[0] == 409
+    assert call(port, "POST", "/api/ask", {"model": "qwen3-4b", "question": "hi"})[0] == 403
+    assert post(app, port, "/api/ask", {"model": "qwen3-4b", "question": "Best rule?"})[0] == 200
+    assert post(app, port, "/api/ask", {"model": "qwen3-4b", "question": "Again?"})[0] == 409
+    for _ in range(50):
+        answer = json.loads(call(port, "GET", "/api/explainer")[2])["answer"]
+        if answer["done"]:
+            break
+        time.sleep(0.05)
+    assert answer["text"] == "Buy and hold returned 11.9%." and answer["question"] == "Best rule?"
+
+
+def test_explainer_context_holds_the_computed_results_and_the_rules():
+    from pathlib import Path
+
+    from forecasting.ui.explainer import SYSTEM_PROMPT, build_context
+
+    root = Path(__file__).resolve().parents[2]
+    context = build_context(root)
+    assert "Buy and hold" in context and "NIFTYBEES" in context
+    if (root / "results" / "timing" / "metrics_final.csv").exists():
+        assert "lockbox (last 3 years)" in context
+    prompt = SYSTEM_PROMPT.format(context=context)
+    assert "never advise buying, selling or holding" in prompt.replace("\n", " ")

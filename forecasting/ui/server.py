@@ -92,6 +92,9 @@ class App:
         self.daily_dir = self.root / "data" / "kite_daily"
         self.job: Job | None = None
         self._login_state: str | None = None
+        self.explainer = None  # created on first question (loads MLX lazily)
+        self.answer = None
+        self.default_model = "qwen3-8b"  # 12 of 12 right vs 10 of 12 (results/explainer)
         self._login_started = 0.0
         self._lock = threading.Lock()
 
@@ -173,6 +176,69 @@ class App:
             out[split] = {"start": t["start"].min(), "end": t["end"].max(), "rules": rows}
             out["available"] = True
         return out
+
+    # ------------------------------------------------------------------ explainer
+    def explainer_status(self) -> dict[str, Any]:
+        from forecasting.ui import explainer as ex
+
+        return {
+            "runtime": ex.runtime_available(),
+            "default": self.default_model,
+            "models": [
+                {
+                    "key": k,
+                    "label": m["label"],
+                    "size_gb": m["size_gb"],
+                    "installed": ex.is_installed(k),
+                }
+                for k, m in ex.MODELS.items()
+            ],
+            "answer": self.answer.as_dict() if self.answer else None,
+        }
+
+    def download_model(self, key: str) -> None:
+        from forecasting.ui import explainer as ex
+
+        if key not in ex.MODELS:
+            raise UserError("Unknown model.")
+        self.start_job(f"Download {ex.MODELS[key]['label']}", lambda: ex.download(key))
+
+    def ask(self, key: str, question: str) -> None:
+        from forecasting.ui import explainer as ex
+
+        question = (question or "").strip()
+        if key not in ex.MODELS:
+            raise UserError("Unknown model.")
+        if not question:
+            raise UserError("Type a question first.")
+        if not ex.runtime_available():
+            raise UserError("The local model runtime is not installed (uv sync --extra slm).")
+        if not ex.is_installed(key):
+            raise UserError(f"{ex.MODELS[key]['label']} is not downloaded yet.")
+        with self._lock:
+            if self.answer and not self.answer.done:
+                raise UserError("Wait for the current answer to finish.")
+            self.answer = ex.Answer(question=question[: ex.MAX_QUESTION_CHARS], model=key)
+            answer = self.answer
+            if self.explainer is None:
+                self.explainer = ex.Explainer(self.root)
+
+        def work() -> None:
+            def show(text: str) -> None:
+                answer.text = text
+
+            try:
+                done = self.explainer.ask(key, question, on_text=show)
+                answer.text, answer.seconds = done.text, done.seconds
+                answer.tokens_per_second = done.tokens_per_second
+                answer.peak_memory_gb = done.peak_memory_gb
+            except Exception as exc:
+                answer.error = f"{type(exc).__name__}: {exc}"
+                log.error("explainer failed:\n%s", traceback.format_exc())
+            finally:
+                answer.done = True
+
+        threading.Thread(target=work, daemon=True).start()
 
     def daily_summary(self) -> dict[str, Any]:
         rows = []
@@ -345,6 +411,8 @@ def make_handler(app: App, port: int) -> type[BaseHTTPRequestHandler]:
                 return self._json(HTTPStatus.OK, app.status())
             if url.path == "/api/study":
                 return self._json(HTTPStatus.OK, app.study())
+            if url.path == "/api/explainer":
+                return self._json(HTTPStatus.OK, app.explainer_status())
             if url.path == "/callback":
                 try:
                     app.finish_login(parse_qs(url.query))
@@ -372,6 +440,12 @@ def make_handler(app: App, port: int) -> type[BaseHTTPRequestHandler]:
                     return self._json(HTTPStatus.OK, {"url": app.start_login()})
                 if path == "/api/download-daily":
                     app.download_daily()
+                    return self._json(HTTPStatus.OK, {"ok": True})
+                if path == "/api/ask":
+                    app.ask(str(body.get("model", "")), str(body.get("question", "")))
+                    return self._json(HTTPStatus.OK, {"ok": True})
+                if path == "/api/download-model":
+                    app.download_model(str(body.get("model", "")))
                     return self._json(HTTPStatus.OK, {"ok": True})
             except UserError as exc:
                 return self._json(HTTPStatus.CONFLICT, {"error": str(exc)})

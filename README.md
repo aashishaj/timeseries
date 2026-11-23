@@ -112,6 +112,16 @@ at http://127.0.0.1:8766 in your browser:
    Zerodha's own page and come straight back.
 2. **Download / update daily prices** for the 10 stocks and NIFTYBEES.
 3. **When to invest, when to stay out**: results of the study below.
+4. **Ask about the results**: a small language model running on the Mac (Qwen3 via
+   Apple's MLX) answers questions in plain English from the project's own results.
+   It is told to use only those numbers, to say when something is not covered, and
+   never to predict prices or advise buying or selling. Models download once from
+   huggingface.co (Qwen3 4B 2.3 GB, Qwen3 8B 4.6 GB); nothing is sent anywhere.
+   On 12 questions with known answers (facts, "why" questions, a stock the study
+   does not cover, and requests for advice or predictions) Qwen3 8B was right on 12
+   and Qwen3 4B on 10, at 1.8 and 1.1 seconds an answer
+   ([comparison](results/explainer/comparison.md)), so the app uses the 8B by
+   default. `uv run --extra slm python -m forecasting.ui.explainer_eval` reruns it.
 
 Everything runs on your Mac only. Close the Terminal window the launcher opens to
 stop the app. (Same thing from a terminal: `uv run --extra kite forecasting ui`.)
